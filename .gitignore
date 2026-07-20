@@ -1,0 +1,31 @@
+# ── secrets — never commit ──────────────────────────────
+backend/.env
+.env
+*.env.local
+
+# ── Python ───────────────────────────────────────────────
+backend/venv/
+**/__pycache__/
+*.pyc
+
+# ── Node / frontend build ───────────────────────────────
+frontend/node_modules/
+frontend/dist/
+
+# ── runtime / local data (not needed for deploy) ────────
+backend/usage_data.json
+data/sop-documents/*
+!data/sop-documents/.gitkeep
+
+# Raw source PDFs/DOCX for the technical book library — 101MB, already
+# indexed into backend/chroma_db, not needed to run the deployed app.
+SOLAR BOOKS/
+docs/
+
+# NOTE: backend/chroma_db/ is INTENTIONALLY NOT ignored —
+# it's the pre-built knowledge base (SOPs + technical books + FAQ cache)
+# and must be committed so a fresh deploy has the full knowledge base
+# without re-running ingestion.
+
+# ── OS ───────────────────────────────────────────────────
+.DS_Store

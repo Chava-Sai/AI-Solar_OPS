@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: astra-ai-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false          # set manually in the Render dashboard — never commit real keys
+      - key: SECRET_KEY
+        generateValue: true  # Render generates a random production secret
+      - key: ALLOWED_ORIGINS
+        sync: false          # set to your Vercel frontend URL, e.g. https://astra-ai.vercel.app
+
+# NOTE on persistence (free plan): Render's free tier has no persistent disk,
+# so the container filesystem resets whenever the instance spins down from
+# inactivity and a new request wakes it back up. This is fine for a pilot:
+#   - The knowledge base (backend/chroma_db) ships PRE-BUILT and committed to
+#     the repo, so SOPs + technical books + the FAQ cache are always present
+#     on every fresh instance — no re-ingestion needed.
+#   - What resets on spin-down: any docs uploaded via the Admin panel during
+#     the pilot, chat history, and daily token/request usage counters.
+# To make uploads/usage durable, upgrade this service to a paid instance type
+# and add a `disk:` block mounting CHROMA_DB_PATH / DOCS_UPLOAD_PATH /
+# USAGE_DATA_PATH onto it.
