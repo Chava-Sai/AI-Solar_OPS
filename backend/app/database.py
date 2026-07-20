@@ -6,77 +6,77 @@ from app.auth import hash_password
 from datetime import datetime
 
 # ── Pre-seeded users (team pilot / test accounts) ──────
-# Password for every account below: astra2026
-TEST_PASSWORD = "astra2026"
+# Password for every account below: test1234
+TEST_PASSWORD = "test1234"
 
 USERS = {
-    "arun@ags.com": {
+    "test1@ags.com": {
         "id": 1,
-        "email": "arun@ags.com",
-        "name": "Arun Pandian",
+        "email": "test1@ags.com",
+        "name": "Test User 1",
         "role": "manager",
         "hashed_password": hash_password(TEST_PASSWORD),
     },
-    "priya.lead@ags.com": {
+    "test2@ags.com": {
         "id": 2,
-        "email": "priya.lead@ags.com",
-        "name": "Priya Ramesh",
+        "email": "test2@ags.com",
+        "name": "Test User 2",
         "role": "lead_analyst",
         "hashed_password": hash_password(TEST_PASSWORD),
     },
-    "karthik.lead@ags.com": {
+    "test3@ags.com": {
         "id": 3,
-        "email": "karthik.lead@ags.com",
-        "name": "Karthik Subramanian",
+        "email": "test3@ags.com",
+        "name": "Test User 3",
         "role": "lead_analyst",
         "hashed_password": hash_password(TEST_PASSWORD),
     },
-    "divya@ags.com": {
+    "test4@ags.com": {
         "id": 4,
-        "email": "divya@ags.com",
-        "name": "Divya Krishnan",
+        "email": "test4@ags.com",
+        "name": "Test User 4",
         "role": "solar_analyst",
         "hashed_password": hash_password(TEST_PASSWORD),
     },
-    "rahul@ags.com": {
+    "test5@ags.com": {
         "id": 5,
-        "email": "rahul@ags.com",
-        "name": "Rahul Mehta",
+        "email": "test5@ags.com",
+        "name": "Test User 5",
         "role": "solar_analyst",
         "hashed_password": hash_password(TEST_PASSWORD),
     },
-    "sneha@ags.com": {
+    "test6@ags.com": {
         "id": 6,
-        "email": "sneha@ags.com",
-        "name": "Sneha Iyer",
+        "email": "test6@ags.com",
+        "name": "Test User 6",
         "role": "solar_analyst",
         "hashed_password": hash_password(TEST_PASSWORD),
     },
-    "vikram@ags.com": {
+    "test7@ags.com": {
         "id": 7,
-        "email": "vikram@ags.com",
-        "name": "Vikram Nair",
+        "email": "test7@ags.com",
+        "name": "Test User 7",
         "role": "solar_analyst",
         "hashed_password": hash_password(TEST_PASSWORD),
     },
-    "ananya@ags.com": {
+    "test8@ags.com": {
         "id": 8,
-        "email": "ananya@ags.com",
-        "name": "Ananya Reddy",
+        "email": "test8@ags.com",
+        "name": "Test User 8",
         "role": "solar_analyst",
         "hashed_password": hash_password(TEST_PASSWORD),
     },
-    "suresh@ags.com": {
+    "test9@ags.com": {
         "id": 9,
-        "email": "suresh@ags.com",
-        "name": "Suresh Kumar",
+        "email": "test9@ags.com",
+        "name": "Test User 9",
         "role": "solar_analyst",
         "hashed_password": hash_password(TEST_PASSWORD),
     },
-    "meera@ags.com": {
+    "test10@ags.com": {
         "id": 10,
-        "email": "meera@ags.com",
-        "name": "Meera Pillai",
+        "email": "test10@ags.com",
+        "name": "Test User 10",
         "role": "solar_analyst",
         "hashed_password": hash_password(TEST_PASSWORD),
     },

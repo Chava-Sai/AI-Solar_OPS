@@ -57,20 +57,20 @@ confirm it streams an answer with sources.
 
 ## Test accounts for the team
 
-Password for **every** account: **`astra2026`**
+Password for **every** account: **`test1234`**
 
-| Email | Name | Role | Can do |
-|---|---|---|---|
-| `arun@ags.com` | Arun Pandian | **Manager** | Chat, upload/delete docs, full history, usage dashboard |
-| `priya.lead@ags.com` | Priya Ramesh | Lead Analyst | Chat, upload docs, full history |
-| `karthik.lead@ags.com` | Karthik Subramanian | Lead Analyst | Chat, upload docs, full history |
-| `divya@ags.com` | Divya Krishnan | Solar Analyst | Chat, own history |
-| `rahul@ags.com` | Rahul Mehta | Solar Analyst | Chat, own history |
-| `sneha@ags.com` | Sneha Iyer | Solar Analyst | Chat, own history |
-| `vikram@ags.com` | Vikram Nair | Solar Analyst | Chat, own history |
-| `ananya@ags.com` | Ananya Reddy | Solar Analyst | Chat, own history |
-| `suresh@ags.com` | Suresh Kumar | Solar Analyst | Chat, own history |
-| `meera@ags.com` | Meera Pillai | Solar Analyst | Chat, own history |
+| Email | Role | Can do |
+|---|---|---|
+| `test1@ags.com` | **Manager** | Chat, upload/delete docs, full history, usage dashboard |
+| `test2@ags.com` | Lead Analyst | Chat, upload docs, full history |
+| `test3@ags.com` | Lead Analyst | Chat, upload docs, full history |
+| `test4@ags.com` | Solar Analyst | Chat, own history |
+| `test5@ags.com` | Solar Analyst | Chat, own history |
+| `test6@ags.com` | Solar Analyst | Chat, own history |
+| `test7@ags.com` | Solar Analyst | Chat, own history |
+| `test8@ags.com` | Solar Analyst | Chat, own history |
+| `test9@ags.com` | Solar Analyst | Chat, own history |
+| `test10@ags.com` | Solar Analyst | Chat, own history |
 
 Accounts and passwords are defined in `backend/app/database.py` — edit that file
 to add/remove people or change the roster before the next deploy.

@@ -10,9 +10,9 @@ const ROLE_LABELS = {
 }
 
 const DEMO_USERS = [
-  { email: 'arun@ags.com', role: 'manager' },
-  { email: 'priya.lead@ags.com', role: 'lead_analyst' },
-  { email: 'divya@ags.com', role: 'solar_analyst' },
+  { email: 'test1@ags.com', role: 'manager' },
+  { email: 'test2@ags.com', role: 'lead_analyst' },
+  { email: 'test4@ags.com', role: 'solar_analyst' },
 ]
 
 export default function Login() {
@@ -109,7 +109,7 @@ export default function Login() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="astra2026"
+                  placeholder="test1234"
                 />
               </div>
             </label>
@@ -125,7 +125,7 @@ export default function Login() {
           <div className="demo-box">
             <div className="demo-box-header">
               <span>Demo accounts</span>
-              <small>Password: astra2026</small>
+              <small>Password: test1234</small>
             </div>
             {DEMO_USERS.map((u) => (
               <button
@@ -133,7 +133,7 @@ export default function Login() {
                 className="demo-account"
                 onClick={() => {
                   setEmail(u.email)
-                  setPassword('astra2026')
+                  setPassword('test1234')
                 }}
               >
                 <span>{u.email}</span>
