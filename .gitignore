@@ -20,7 +20,6 @@ data/sop-documents/*
 # Raw source PDFs/DOCX for the technical book library — 101MB, already
 # indexed into backend/chroma_db, not needed to run the deployed app.
 SOLAR BOOKS/
-docs/
 
 # NOTE: backend/chroma_db/ is INTENTIONALLY NOT ignored —
 # it's the pre-built knowledge base (SOPs + technical books + FAQ cache)

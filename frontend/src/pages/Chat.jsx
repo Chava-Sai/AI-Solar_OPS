@@ -14,13 +14,17 @@ import {
   LogOut,
   MessageSquarePlus,
   PanelLeftClose,
+  Pencil,
   Search,
   Settings,
   Sparkles,
   Square,
+  Star,
+  Trash2,
   Zap,
 } from 'lucide-react'
 import { chatAPI, streamChat } from '../api/client'
+import agsLogo from '../assets/ags-logo-hero-dark.png'
 
 function formatReset(seconds) {
   if (seconds == null) return ''
@@ -139,6 +143,57 @@ function UsageRing({ usage, modelPref, onPickModel }) {
   )
 }
 
+/** One row in the sidebar chat list — open / favorite / rename / delete. */
+function ConversationRow({
+  conversation, isActive, isRenaming, renameValue, favoritesFull,
+  onOpen, onToggleFavorite, onStartRename, onRenameChange, onCommitRename, onCancelRename, onDelete,
+}) {
+  return (
+    <div className={`history-item ${isActive ? 'active' : ''}`}>
+      {isRenaming ? (
+        <input
+          className="rename-input"
+          autoFocus
+          value={renameValue}
+          onChange={(e) => onRenameChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onCommitRename()
+            if (e.key === 'Escape') onCancelRename()
+          }}
+          onBlur={onCommitRename}
+        />
+      ) : (
+        <button className="history-item-main" onClick={onOpen}>
+          <span>{conversation.title}</span>
+          <small>{new Date(conversation.updatedAt).toLocaleDateString()}</small>
+        </button>
+      )}
+      <div className="history-item-actions">
+        <button
+          className={`icon-mini favorite-btn ${conversation.favorite ? 'active' : ''}`}
+          disabled={!conversation.favorite && favoritesFull}
+          title={
+            conversation.favorite
+              ? 'Remove from favorites'
+              : favoritesFull
+                ? `Favorites full (max ${MAX_FAVORITE_CHATS}) — remove one first`
+                : 'Add to favorites'
+          }
+          onClick={(e) => { e.stopPropagation(); onToggleFavorite() }}
+        >
+          <Star size={13} fill={conversation.favorite ? 'currentColor' : 'none'} />
+        </button>
+        <button className="icon-mini" title="Rename" onClick={(e) => { e.stopPropagation(); onStartRename() }}>
+          <Pencil size={13} />
+        </button>
+        <button className="icon-mini danger" title="Delete" onClick={(e) => { e.stopPropagation(); onDelete() }}>
+          <Trash2 size={13} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 const ROLE_LABELS = {
   manager: 'Manager',
   lead_analyst: 'Lead Solar Analyst',
@@ -185,6 +240,8 @@ const SUGGESTIONS = [
 ]
 
 const CONVERSATION_KEY = 'astra_conversations'
+const MAX_RECENT_CHATS = 10   // rolling queue — oldest (by creation) auto-deleted beyond this
+const MAX_FAVORITE_CHATS = 5  // permanent, never auto-evicted; only the owner can delete them
 
 function readConversations(userEmail) {
   try {
@@ -220,6 +277,8 @@ export default function Chat() {
   const [sideTab, setSideTab] = useState('categories')
   const [conversations, setConversations] = useState(() => readConversations(user.email))
   const [activeConversationId, setActiveConversationId] = useState(null)
+  const [renamingId, setRenamingId] = useState(null)
+  const [renameValue, setRenameValue] = useState('')
   const [copied, setCopied] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [usage, setUsage] = useState(null)
@@ -237,6 +296,9 @@ export default function Chat() {
   const ctrlRef = useRef(null)
   const chatScrollRef = useRef(null)
   const sidebarScrollRef = useRef(null)
+  // Guards against a stray blur (fired when Escape unmounts the rename input)
+  // re-committing text that the user just cancelled.
+  const suppressRenameBlur = useRef(false)
 
   useEffect(() => {
     chatScrollRef.current?.scrollTo({ top: 0 })
@@ -274,14 +336,27 @@ export default function Chat() {
       const nextConversation = {
         id: activeConversationId,
         userEmail: user.email,
-        title: titleFromMessages(messages),
+        // A manually-renamed title (titleLocked) is never overwritten by the
+        // auto-generated "first message" title on later turns.
+        title: existing?.titleLocked ? existing.title : titleFromMessages(messages),
+        titleLocked: existing?.titleLocked || false,
+        favorite: existing?.favorite || false,
         messages: messages.map(({ streaming: _streaming, sources: _sources, ...m }) => m),
         updatedAt: new Date().toISOString(),
         createdAt: existing?.createdAt || new Date().toISOString(),
       }
-      const next = [nextConversation, ...prev.filter((c) => c.id !== activeConversationId)]
-        .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-        .slice(0, 40)
+      const combined = [nextConversation, ...prev.filter((c) => c.id !== activeConversationId)]
+
+      // Favorites are permanent — never auto-evicted. Non-favorites are a
+      // rolling queue: oldest-by-creation is dropped once there are more
+      // than MAX_RECENT_CHATS of them.
+      const favorites = combined.filter((c) => c.favorite)
+      const recents = combined
+        .filter((c) => !c.favorite)
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        .slice(-MAX_RECENT_CHATS)
+
+      const next = [...favorites, ...recents]
       writeConversations(user.email, next)
       return next
     })
@@ -365,6 +440,63 @@ export default function Chat() {
     })
   }
 
+  function toggleFavorite(conversationId) {
+    setConversations((prev) => {
+      const target = prev.find((c) => c.id === conversationId)
+      if (!target) return prev
+      const favoriteCount = prev.filter((c) => c.favorite).length
+      if (!target.favorite && favoriteCount >= MAX_FAVORITE_CHATS) {
+        alert(`You can only keep ${MAX_FAVORITE_CHATS} favorite chats. Remove one first.`)
+        return prev
+      }
+      const next = prev.map((c) => (c.id === conversationId ? { ...c, favorite: !c.favorite } : c))
+      writeConversations(user.email, next)
+      return next
+    })
+  }
+
+  function deleteConversation(conversationId) {
+    if (!confirm('Delete this chat? This cannot be undone.')) return
+    setConversations((prev) => {
+      const next = prev.filter((c) => c.id !== conversationId)
+      writeConversations(user.email, next)
+      return next
+    })
+    if (activeConversationId === conversationId) {
+      setMessages([])
+      setActiveConversationId(null)
+    }
+  }
+
+  function startRename(conversation) {
+    setRenamingId(conversation.id)
+    setRenameValue(conversation.title)
+  }
+
+  function commitRename() {
+    if (suppressRenameBlur.current) {
+      suppressRenameBlur.current = false
+      return
+    }
+    if (!renamingId) return
+    const trimmed = renameValue.trim()
+    setConversations((prev) => {
+      const next = prev.map((c) =>
+        c.id === renamingId ? { ...c, title: trimmed || c.title, titleLocked: true } : c
+      )
+      writeConversations(user.email, next)
+      return next
+    })
+    setRenamingId(null)
+    setRenameValue('')
+  }
+
+  function cancelRename() {
+    suppressRenameBlur.current = true
+    setRenamingId(null)
+    setRenameValue('')
+  }
+
   function logout() {
     localStorage.clear()
     navigate('/login')
@@ -374,17 +506,16 @@ export default function Chat() {
   const greeting = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'
   const canAdmin = ['manager', 'lead_analyst'].includes(user.role)
 
+  const byRecentActivity = (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
+  const favoriteConversations = conversations.filter((c) => c.favorite).sort(byRecentActivity)
+  const recentConversations = conversations.filter((c) => !c.favorite).sort(byRecentActivity)
+
   return (
     <div className={`app-shell ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
       <aside className="sidebar">
         <div className="brand-lockup">
-          <div className="brand-mark">
-            <Zap size={21} />
-          </div>
-          <div>
-            <p className="brand-name">Astra AI</p>
-            <p className="brand-sub">SolarOps command center</p>
-          </div>
+          <img className="brand-logo" src={agsLogo} alt="American Green Solutions" />
+          <p className="brand-sub">SolarOps command center</p>
         </div>
 
         <button className="primary-nav-button" onClick={newChat}>
@@ -428,23 +559,63 @@ export default function Chat() {
             </>
           ) : (
             <>
-              <p className="section-kicker">Chats</p>
-              {conversations.length === 0 ? (
+              {favoriteConversations.length > 0 && (
+                <>
+                  <p className="section-kicker">
+                    Favorites ({favoriteConversations.length}/{MAX_FAVORITE_CHATS})
+                  </p>
+                  <div className="history-list">
+                    {favoriteConversations.map((conversation) => (
+                      <ConversationRow
+                        key={conversation.id}
+                        conversation={conversation}
+                        isActive={activeConversationId === conversation.id}
+                        isRenaming={renamingId === conversation.id}
+                        renameValue={renameValue}
+                        favoritesFull={favoriteConversations.length >= MAX_FAVORITE_CHATS}
+                        onOpen={() => openConversation(conversation)}
+                        onToggleFavorite={() => toggleFavorite(conversation.id)}
+                        onStartRename={() => startRename(conversation)}
+                        onRenameChange={setRenameValue}
+                        onCommitRename={commitRename}
+                        onCancelRename={cancelRename}
+                        onDelete={() => deleteConversation(conversation.id)}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <p className="section-kicker with-space">
+                Recent ({recentConversations.length}/{MAX_RECENT_CHATS})
+              </p>
+              {recentConversations.length === 0 ? (
                 <div className="empty-panel">
                   <Clock3 size={20} />
-                  <span>No saved chats yet.</span>
+                  <span>
+                    {favoriteConversations.length > 0
+                      ? 'No other recent chats.'
+                      : 'No saved chats yet.'}
+                  </span>
                 </div>
               ) : (
                 <div className="history-list">
-                  {conversations.map((conversation) => (
-                    <button
+                  {recentConversations.map((conversation) => (
+                    <ConversationRow
                       key={conversation.id}
-                      className={`history-item ${activeConversationId === conversation.id ? 'active' : ''}`}
-                      onClick={() => openConversation(conversation)}
-                    >
-                      <span>{conversation.title}</span>
-                      <small>{new Date(conversation.updatedAt).toLocaleDateString()}</small>
-                    </button>
+                      conversation={conversation}
+                      isActive={activeConversationId === conversation.id}
+                      isRenaming={renamingId === conversation.id}
+                      renameValue={renameValue}
+                      favoritesFull={favoriteConversations.length >= MAX_FAVORITE_CHATS}
+                      onOpen={() => openConversation(conversation)}
+                      onToggleFavorite={() => toggleFavorite(conversation.id)}
+                      onStartRename={() => startRename(conversation)}
+                      onRenameChange={setRenameValue}
+                      onCommitRename={commitRename}
+                      onCancelRename={cancelRename}
+                      onDelete={() => deleteConversation(conversation.id)}
+                    />
                   ))}
                 </div>
               )}

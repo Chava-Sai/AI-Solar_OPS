@@ -19,6 +19,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { chatAPI, docsAPI } from '../api/client'
+import agsLogo from '../assets/ags-logo-hero-dark.png'
 
 function formatReset(seconds) {
   if (seconds == null) return ''
@@ -176,13 +177,8 @@ export default function Admin() {
     <div className="admin-layout">
       <aside className="admin-rail">
         <div className="brand-lockup">
-          <div className="brand-mark">
-            <Zap size={21} />
-          </div>
-          <div>
-            <p className="brand-name">Astra AI</p>
-            <p className="brand-sub">Admin console</p>
-          </div>
+          <img className="brand-logo" src={agsLogo} alt="American Green Solutions" />
+          <p className="brand-sub">Admin console</p>
         </div>
 
         <button className={`rail-link ${view === 'docs' ? 'active' : ''}`} onClick={() => setView('docs')}>

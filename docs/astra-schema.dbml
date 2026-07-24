@@ -1,0 +1,151 @@
+// Astra AI SolarOps — persistence schema (target: Supabase Postgres)
+// Paste this whole file into https://dbdiagram.io/d  →  it auto-draws the ER diagram.
+// From there: hover the download icon (top right) to export PNG / PDF / SVG / SQL.
+//
+// Vector data (chunk embeddings, FAQ question embeddings) intentionally stays in
+// ChromaDB — this schema covers only the relational side of the app.
+
+Project astra_ai_solarops {
+  database_type: 'PostgreSQL'
+  Note: 'Replaces: in-memory USERS dict, stateless-only JWT, in-memory CHAT_HISTORY, usage_data.json, and browser-localStorage favorites.'
+}
+
+// ───────────────────────── Auth ─────────────────────────
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  email text [unique, not null, note: 'login identifier']
+  name text [not null]
+  hashed_password text [not null, note: 'bcrypt hash']
+  role text [not null, note: 'manager | lead_analyst | solar_analyst']
+  created_at timestamptz [not null, default: `now()`]
+
+  Note: 'One row per person who can sign in.'
+}
+
+Table sessions {
+  id uuid [pk, note: 'equals the JWT jti claim']
+  user_id uuid [ref: > users.id, not null]
+  created_at timestamptz [not null, default: `now()`]
+  expires_at timestamptz [not null]
+  last_active_at timestamptz [not null]
+  revoked boolean [not null, default: false]
+  ip_address text
+  user_agent text
+
+  Note: 'One row per login. Makes JWT auth revocable, listable, and countable — replaces the stateless-only token today.'
+}
+
+// ───────────────────────── Chat ─────────────────────────
+
+Table conversations {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [ref: > users.id, not null]
+  title text [not null, note: 'auto-generated from first message, or renamed by owner']
+  created_at timestamptz [not null, default: `now()`, note: 'drives the 10-chat FIFO queue']
+  updated_at timestamptz [not null, default: `now()`, note: 'drives "recent" sort order']
+
+  Note: 'One row per chat thread.'
+}
+
+Table messages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  conversation_id uuid [ref: > conversations.id, not null]
+  role text [not null, note: 'user | assistant']
+  content text [not null]
+  model_key text [ref: > models.model_key, note: 'null on user turns and FAQ hits']
+  is_faq_hit boolean [not null, default: false]
+  created_at timestamptz [not null, default: `now()`]
+
+  Note: 'One row per turn — a question or a streamed answer.'
+}
+
+Table message_sources {
+  id uuid [pk, default: `gen_random_uuid()`]
+  message_id uuid [ref: > messages.id, not null]
+  document_id uuid [ref: > documents.id, not null]
+  chunk_index int
+  similarity_score real [note: 'cosine distance from retrieval']
+
+  Note: 'One row per document an answer cites. Split out to keep 1NF — an answer routinely cites 3-4 sources at once.'
+}
+
+// ───────────────────────── Favorites ─────────────────────────
+
+Table favorites {
+  user_id uuid [ref: > users.id, not null]
+  conversation_id uuid [ref: > conversations.id, not null]
+  favorited_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, conversation_id) [pk]
+  }
+
+  Note: 'Permanent, max 5/user (enforced in the app layer by counting rows), owner-only delete.'
+}
+
+// ───────────────────────── Knowledge base ─────────────────────────
+
+Table documents {
+  id uuid [pk, default: `gen_random_uuid()`]
+  filename text [not null]
+  category text [note: 'Case Creation, Alerts, PV Technical, BESS, ...']
+  client_name text [note: 'Clean Leaf, Technical Library, ...']
+  file_type text [note: '.pdf .docx .xlsx ...']
+  total_chunks int [not null, default: 0, note: 'count of chunks in ChromaDB']
+  uploaded_by uuid [ref: > users.id]
+  uploaded_at timestamptz [not null, default: `now()`]
+
+  Note: 'One row per ingested file. Category/client/type live here ONCE — not repeated per chunk like the current ChromaDB metadata does.'
+}
+
+Table faq_entries {
+  id uuid [pk, default: `gen_random_uuid()`]
+  question text [not null, note: 'question embedding lives in ChromaDB, keyed by this id']
+  answer text [not null]
+  source_document_id uuid [ref: > documents.id]
+  created_at timestamptz [not null, default: `now()`]
+
+  Note: 'One row per cached Q&A — free, instant answers that skip the LLM entirely.'
+}
+
+// ───────────────────────── Usage / quota ─────────────────────────
+
+Table models {
+  model_key text [pk, note: 'gpt120 | llama70 | gpt20 | llama8']
+  label text [not null, note: '"GPT-OSS 120B", ...']
+  groq_model_id text [not null, note: 'the literal Groq API model string']
+  user_daily_tokens int [not null]
+  user_daily_requests int [not null]
+  global_daily_tokens int [not null, note: 'Groq team-wide TPD cap']
+  global_daily_requests int [not null, note: 'Groq team-wide RPD cap']
+  spend_priority int [not null, note: '1 = spent first']
+
+  Note: 'Lookup table — replaces the hardcoded MODELS dict in usage.py.'
+}
+
+Table usage_model_daily {
+  user_id uuid [ref: > users.id, not null]
+  model_key text [ref: > models.model_key, not null]
+  usage_date date [not null]
+  tokens_used int [not null, default: 0, note: 'exact count from Groq response usage field']
+  requests_used int [not null, default: 0]
+
+  indexes {
+    (user_id, model_key, usage_date) [pk]
+  }
+
+  Note: 'The budget ledger — one row per user, per model, per day.'
+}
+
+Table usage_daily_summary {
+  user_id uuid [ref: > users.id, not null]
+  usage_date date [not null]
+  faq_hits int [not null, default: 0, note: 'the only fact at this grain — logins/last_active are derived from sessions, not stored']
+
+  indexes {
+    (user_id, usage_date) [pk]
+  }
+
+  Note: 'One row per user, per day. Deliberately does NOT store logins or last_active — those are derivable from sessions (COUNT / MAX), so storing them would risk drift.'
+}

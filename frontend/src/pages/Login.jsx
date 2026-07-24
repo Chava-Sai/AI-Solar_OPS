@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, BadgeCheck, LockKeyhole, Mail, ShieldCheck, Sparkles, Zap } from 'lucide-react'
+import { ArrowRight, BadgeCheck, LockKeyhole, Mail, ShieldCheck, Sparkles } from 'lucide-react'
 import { authAPI } from '../api/client'
+import agsLogo from '../assets/ags-logo-hero-dark.png'
 
 const ROLE_LABELS = {
   manager: 'Manager',
@@ -42,13 +43,8 @@ export default function Login() {
     <main className="login-page">
       <section className="login-hero">
         <div className="brand-lockup large">
-          <div className="brand-mark">
-            <Zap size={23} />
-          </div>
-          <div>
-            <p className="brand-name">Astra AI</p>
-            <p className="brand-sub">SolarOps intelligence layer</p>
-          </div>
+          <img className="brand-logo" src={agsLogo} alt="American Green Solutions" />
+          <p className="brand-sub">SolarOps intelligence layer</p>
         </div>
 
         <div className="login-headline">

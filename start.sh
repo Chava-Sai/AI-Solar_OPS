@@ -40,6 +40,6 @@ case "$1" in
     echo ""
     status
     echo ""
-    echo "→ Open http://localhost:5173  (login: manager@ags.com / astra2026)"
+    echo "→ Open http://localhost:5173  (login: test1@ags.com / test1234)"
     ;;
 esac
