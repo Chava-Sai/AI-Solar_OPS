@@ -27,6 +27,38 @@ logger = logging.getLogger(__name__)
 CHROMA_PATH    = os.getenv("CHROMA_DB_PATH", "./chroma_db")
 FAQ_COLLECTION = "faq_cache"
 
+# Curated entries — SME-verified facts that are technically present in the
+# source SOPs but buried/ambiguous enough that retrieval doesn't reliably
+# surface them (2026-07-27 feedback). Grounded in "Types in Case Creation.docx"
+# and "Reactive Case creation.docx" — not invented content.
+CURATED_ENTRIES = [
+    {
+        "question": "What Work Order Type should be used for a Reactive Case?",
+        "answer": (
+            "For a Reactive Case, set the Work Order (WO) Type to **Not Applicable**.\n\n"
+            "The **Primary PM** and **Secondary PM** Work Order Types are used only for "
+            "Maintenance (PM) cases — never for Reactive cases."
+        ),
+    },
+    {
+        "question": "What is the difference between a Reactive Case and an Ancillary – Reactive Case?",
+        "answer": (
+            "These are two distinct case types — do not treat them as the same:\n\n"
+            "**Reactive Case** — created for an issue at the inverter or site level "
+            "(e.g. offline, communication loss, low production). Typically raised by "
+            "the OPS Centre team, though it can also come from the Customer, an Area "
+            "Supervisor, Regional Manager, or a field technician. Priority is based on "
+            "kW loss: Low (0–250kW), High (250–750kW), Emergency (above 750kW). "
+            "Case Record Type: **Reactive**.\n\n"
+            "**Ancillary – Reactive Case** — a different category entirely, requested "
+            "by email (typically from Suyen Tolbert), covering work like Snow Removal "
+            "or other general site work — not an inverter/site performance issue. "
+            "Always Priority: Medium, Case Origin: Manager Created, Reported Issue: "
+            "Other, using the BOP asset. Case Record Type: **Ancillary – Reactive**."
+        ),
+    },
+]
+
 _client = chromadb.PersistentClient(path=CHROMA_PATH)
 
 
@@ -111,8 +143,9 @@ def parse_questionnaire(docx_path: str) -> list[dict]:
 
 # ── Build / rebuild ────────────────────────────────────────────────────────────
 def build_faq_collection(docx_path: str) -> dict:
-    """(Re)build the FAQ cache collection from a questionnaire document."""
-    pairs = parse_questionnaire(docx_path)
+    """(Re)build the FAQ cache collection from a questionnaire document, plus
+    the curated SME-verified entries defined above."""
+    pairs = parse_questionnaire(docx_path) + CURATED_ENTRIES
     if not pairs:
         return {"status": "error", "message": "No Q&A pairs found"}
 

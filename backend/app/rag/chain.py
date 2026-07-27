@@ -6,6 +6,7 @@ import logging
 from app.rag.embedder   import embed_query
 from app.rag.vector_store import search, get_stats
 from app.rag.llm        import get_llm_response
+from app.rag.case_type_guard import rerank_by_case_type
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,12 @@ def retrieve_context(
         }
 
     logger.info(f"[RAG] Retrieved {len(chunks)} chunks (best distance: {distances[0]:.3f})")
+
+    # 2b. Case-type guard — demote (never hard-exclude) chunks that are
+    # clearly about a different, similarly-named case type than the one the
+    # query names (e.g. "Ancillary – Reactive" content for a "Reactive"
+    # query). No-ops when the query doesn't clearly name a single type.
+    chunks, metadatas, distances = rerank_by_case_type(query, chunks, metadatas, distances)
 
     # 3. Smart context selection — biggest token saver in the pipeline.
     # Instead of always sending all retrieved chunks (~1,000 tokens), keep a
