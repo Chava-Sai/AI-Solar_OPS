@@ -1,29 +1,63 @@
 # Deploying Astra AI for the team pilot
 
 **Frontend → Vercel** (best fit: static React/Vite build, free, instant global CDN).
-**Backend → Render** (best fit: FastAPI needs a long-running process for streaming
-SSE responses and the persistent embedding model — Vercel's serverless functions
-are the wrong shape for that; Render runs it as a normal always-on web service).
+**Backend → Google Cloud Run** (current direction — real Docker container, no
+serverless language restriction, fits the embedding model + streaming responses
+comfortably). **Render** is kept documented below since it's what testing has
+used so far; the app deploys identically to either.
 
 ---
 
-## ⚠️ Known limits of this test deployment (read first)
+## 0. Backend → Google Cloud Run (current direction)
 
-1. **Free-tier RAM risk.** The embedding model (sentence-transformers + torch) is
-   memory-hungry. Render's **free** plan gives 512MB RAM, which may not be enough —
-   if the deploy crashes or restarts in a loop, upgrade to the **Starter** plan
-   (~$7/month) for 512MB→2GB and it will resolve immediately.
-2. **Free-tier storage resets.** Render's free plan has no persistent disk. The
+Cloud Run runs `backend/Dockerfile` as a normal container — unlike Supabase's
+Edge Functions (JavaScript-only) or Vercel's serverless functions (execution-time
+limits, cold-start-unfriendly for a model that needs to stay loaded), this is a
+real, long-lived Python process with configurable memory, which is exactly what
+the embedding model + ChromaDB + streamed (SSE) chat responses need.
+
+```bash
+# from the backend/ directory, with gcloud CLI authenticated and a project selected
+gcloud run deploy astra-ai-backend \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --memory 1Gi \
+  --min-instances 1 \
+  --set-env-vars ALLOWED_ORIGINS=https://your-vercel-url.vercel.app
+```
+
+- `--min-instances 1` keeps one instance warm — no cold-start reload of the
+  embedding model on the first request after idle time (the problem we hit on
+  Render's free tier).
+- Set `GROQ_API_KEY` as a secret rather than a plain env var:
+  `gcloud run services update astra-ai-backend --set-secrets=GROQ_API_KEY=groq-api-key:latest`
+  (create the secret first: `gcloud secrets create groq-api-key --data-file=-`).
+- The knowledge base (`backend/chroma_db`, 27 documents / 2,547 chunks / 34 FAQ
+  entries) is baked into the image at build time — no re-ingestion step needed.
+- **Persistence caveat still applies here too**, same as Render: anything written
+  after the container starts (new Admin-panel uploads, chat history, usage
+  counters) resets when Cloud Run recycles the instance, until the Supabase
+  migration lands (see the README's "Database design" section).
+- Point Vercel's `VITE_API_URL` at the Cloud Run URL it gives you
+  (`https://astra-ai-backend-xxxxx.<region>.run.app`), and update
+  `ALLOWED_ORIGINS` above once you have the real Vercel URL.
+
+---
+
+## Backend → Render (used for testing so far)
+
+### ⚠️ Known limits of the Render free tier
+
+1. **Free-tier storage resets.** Render's free plan has no persistent disk. The
    **knowledge base is unaffected** — it's pre-built and shipped with the code
    (`backend/chroma_db`, 27 documents / 2,547 chunks / 34 FAQ entries already
    indexed). But anything written *after* boot — new Admin-panel uploads, chat
    history, daily usage counters — resets whenever the free instance spins down
    from inactivity (~15 min idle) and back up. Fine for a pilot; mention it to
    the team so nobody's surprised.
-3. **Free-tier cold start.** After 15 minutes idle, the first request takes
+2. **Free-tier cold start.** After 15 minutes idle, the first request takes
    ~30-60s while Render wakes the instance and reloads the embedding model.
-
----
 
 ## 1. Backend → Render
 

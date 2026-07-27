@@ -211,9 +211,12 @@ starts with the full knowledge base already searchable — no re-ingestion requi
 
 ## Deployment
 
-Full step-by-step in **[`docs/DEPLOY.md`](docs/DEPLOY.md)**. Current setup used for
-testing: **Vercel** (frontend) + **Render free tier** (backend). Render is being
-reconsidered — see below.
+Full step-by-step in **[`DEPLOY.md`](DEPLOY.md)**. **Frontend → Vercel.**
+**Backend → Google Cloud Run** (current direction — runs `backend/Dockerfile` as a
+real container, so the RAG/LLM pipeline's actual Python code runs unchanged, with
+proper memory for the embedding model and no execution-time limits on the streamed
+chat responses). Render is also documented there — it's what testing has used so far,
+and the app deploys identically to either.
 
 ## Database design (Supabase migration — in progress)
 
@@ -225,19 +228,15 @@ and a 1NF/2NF/3NF normalization walkthrough — is in
 (source: `docs/astra-schema.dbml`, paste into [dbdiagram.io](https://dbdiagram.io/d)
 for an interactive version).
 
-**Open question, not yet resolved:** Supabase can own all the *data* (accounts, chat
-history, usage, files) cleanly, but the RAG/LLM pipeline is Python and Supabase's
-Edge Functions only run JavaScript — so something still has to run that Python code.
-Two paths are on the table:
-1. Keep the Python backend as-is, host it somewhere other than Render (same code, ~$5–10/mo)
-2. Rewrite the RAG pipeline in JavaScript for Supabase Edge Functions (bigger effort,
-   real risk around document parsing and the embedding step in that ecosystem)
+Supabase owns the *data* side (accounts, chat history, usage, files); the RAG/LLM
+pipeline stays a Python service on Cloud Run — Supabase's own Edge Functions only run
+JavaScript, and this pipeline's document parsing + local embedding model are
+meaningfully more mature/reliable in Python than their JS equivalents.
 
 ## Known limitations / open decisions
 
 - **Persistence**: see above — chat history/usage resets on backend restart until the
-  Supabase migration lands.
-- **Render free tier**: cold-starts after 15 min idle, and previously OOM'd until the
-  fastembed swap fixed memory usage — still not meant as the final production host.
+  Supabase migration lands. Applies the same way on Cloud Run as it did on Render,
+  until that's done.
 - **Token accounting is estimated** where Groq doesn't return exact counts (a rare
   fallback path); the primary path uses Groq's real per-call token counts.

@@ -1,0 +1,9 @@
+# Used by `gcloud run deploy --source .` when uploading the build context.
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.env
+usage_data.json
+.git
+.gitignore
