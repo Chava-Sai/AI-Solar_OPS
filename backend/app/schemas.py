@@ -29,6 +29,10 @@ class UserOut(BaseModel):
     name: str
     role: str
 
+# ── Server-side chat conversations (Recent + Favorites) ─
+class ConversationsPayload(BaseModel):
+    conversations: List[dict]
+
 # ── Chat ──────────────────────────────────────────────
 class ChatRequest(BaseModel):
     query: str

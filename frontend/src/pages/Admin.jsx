@@ -80,7 +80,7 @@ export default function Admin() {
   const [teamUsers, setTeamUsers] = useState([])
   const [teamLoading, setTeamLoading] = useState(false)
   const [teamError, setTeamError] = useState('')
-  const [newUser, setNewUser] = useState({ email: '', name: '', password: '', role: 'solar_analyst' })
+  const [newUser, setNewUser] = useState({ email: '', name: '', password: '', role: 'user' })
   const [addingUser, setAddingUser] = useState(false)
 
   useEffect(() => {
@@ -116,7 +116,7 @@ export default function Admin() {
     setAddingUser(true)
     try {
       await adminAPI.createUser(newUser.email, newUser.name, newUser.password, newUser.role)
-      setNewUser({ email: '', name: '', password: '', role: 'solar_analyst' })
+      setNewUser({ email: '', name: '', password: '', role: 'user' })
       loadTeamUsers()
     } catch (err) {
       setTeamError(err.response?.data?.detail || 'Could not add user.')
@@ -237,7 +237,7 @@ export default function Admin() {
           <Activity size={17} />
           Usage dashboard
         </button>
-        {user.role === 'manager' && (
+        {user.role === 'admin' && (
           <button className={`rail-link ${view === 'team' ? 'active' : ''}`} onClick={() => setView('team')}>
             <UserPlus size={17} />
             Team access
@@ -263,7 +263,7 @@ export default function Admin() {
           <div className="avatar">{user.name?.[0]?.toUpperCase() || 'A'}</div>
           <div>
             <strong>{user.name || 'Astra User'}</strong>
-            <span>{user.role?.replace('_', ' ') || 'admin'}</span>
+            <span>{user.role === 'admin' ? 'Admin' : 'User'}</span>
           </div>
         </div>
       </aside>
@@ -475,9 +475,8 @@ export default function Admin() {
                     value={newUser.role}
                     onChange={(e) => setNewUser((u) => ({ ...u, role: e.target.value }))}
                   >
-                    <option value="manager">Manager</option>
-                    <option value="lead_analyst">Lead Analyst</option>
-                    <option value="solar_analyst">Solar Analyst</option>
+                    <option value="admin">Admin</option>
+                    <option value="user">User</option>
                   </select>
                 </label>
 
@@ -500,15 +499,11 @@ export default function Admin() {
               </div>
               <div className="health-list">
                 <div>
-                  <span>Manager</span>
-                  <strong>Chat, docs, usage, team access</strong>
+                  <span>Admin</span>
+                  <strong>Chat, docs, usage, team access, everyone's history</strong>
                 </div>
                 <div>
-                  <span>Lead Analyst</span>
-                  <strong>Chat, upload docs, full history</strong>
-                </div>
-                <div>
-                  <span>Solar Analyst</span>
+                  <span>User</span>
                   <strong>Chat, own history only</strong>
                 </div>
               </div>
@@ -543,7 +538,7 @@ export default function Admin() {
                   <div key={u.id} className="doc-row">
                     <span className="doc-name">{u.name}</span>
                     <span>{u.email}</span>
-                    <span className="tag">{u.role.replace('_', ' ')}</span>
+                    <span className="tag">{u.role === 'admin' ? 'Admin' : 'User'}</span>
                     <span />
                     {u.email.toLowerCase() === user.email?.toLowerCase() ? (
                       <span />
@@ -653,8 +648,8 @@ export default function Admin() {
                 <strong>{stats.total_chunks}</strong>
               </div>
               <div>
-                <span>Manager delete access</span>
-                <strong>{user.role === 'manager' ? 'Enabled' : 'Restricted'}</strong>
+                <span>Admin delete access</span>
+                <strong>{user.role === 'admin' ? 'Enabled' : 'Restricted'}</strong>
               </div>
             </div>
           </div>
@@ -694,7 +689,7 @@ export default function Admin() {
                   <span className="tag">{d.category}</span>
                   <span>{d.client}</span>
                   <strong>{d.total_chunks}</strong>
-                  {user.role === 'manager' ? (
+                  {user.role === 'admin' ? (
                     <button className="danger-icon" onClick={() => handleDelete(d.filename)} title="Delete document" aria-label={`Delete ${d.filename}`}>
                       <Trash2 size={16} />
                     </button>

@@ -56,7 +56,7 @@ export default function Login() {
           <div>
             <ShieldCheck size={18} />
             <strong>Role gated</strong>
-            <span>Managers and leads manage documents; analysts stay in chat.</span>
+            <span>Admins manage documents and the team; everyone else stays in chat.</span>
           </div>
         </div>
       </section>

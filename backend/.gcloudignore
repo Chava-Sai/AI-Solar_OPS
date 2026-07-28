@@ -6,5 +6,6 @@ __pycache__/
 .env
 usage_data.json
 users_data.json
+conversations_data.json
 .git
 .gitignore

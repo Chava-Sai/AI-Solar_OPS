@@ -12,9 +12,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from typing import List
 
-from app.schemas import ChatRequest, ChatResponse, SourceRef, ChatHistoryItem
+from app.schemas import ChatRequest, ChatResponse, SourceRef, ChatHistoryItem, ConversationsPayload
 from app.auth import get_current_user, require_role
-from app.database import save_chat, get_history
+from app.database import save_chat, get_history, get_user
+from app.conversations import list_conversations, save_conversations
 from app.rag.chain import rag_query, retrieve_context
 from app.rag.embedder import embed_query
 from app.rag.faq import match_faq, faq_stats
@@ -149,14 +150,13 @@ def my_usage(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/admin/usage")
-def admin_usage(current_user: dict = Depends(require_role("manager", "lead_analyst"))):
+def admin_usage(current_user: dict = Depends(require_role("admin"))):
     """Team-wide model usage for the admin dashboard: global Groq budget
     consumption per model + per-user breakdown with logins/last-active."""
-    from app.database import USERS
     overview = usage.get_admin_overview()
     # attach display names for known users
     for u in overview["users"]:
-        rec = USERS.get(u["email"])
+        rec = get_user(u["email"])
         u["name"] = rec["name"] if rec else u["email"].split("@")[0]
         u["role"] = rec["role"] if rec else "unknown"
     return overview
@@ -213,3 +213,21 @@ def chat_history(current_user: dict = Depends(get_current_user)):
 @router.get("/stats")
 def chat_stats(current_user: dict = Depends(get_current_user)):
     return {**get_stats(), "faq": faq_stats()}
+
+
+@router.get("/conversations")
+def get_conversations(current_user: dict = Depends(get_current_user)):
+    """Server-side Recent + Favorites list — same account, any browser/device."""
+    return {"conversations": list_conversations(current_user["sub"])}
+
+
+@router.put("/conversations")
+def put_conversations(body: ConversationsPayload, current_user: dict = Depends(get_current_user)):
+    """
+    Replaces the caller's full conversation list. The client computes the
+    trimmed Recent(10)/Favorites(5) array exactly as it did with localStorage
+    — this just persists it, scoped to the JWT's own email regardless of
+    what's in the payload.
+    """
+    save_conversations(current_user["sub"], body.conversations)
+    return {"message": "Saved.", "count": len(body.conversations)}

@@ -46,6 +46,8 @@ export const chatAPI = {
   stats:   () => api.get('/chat/stats'),
   usage:   () => api.get('/chat/usage'),
   adminUsage: () => api.get('/chat/admin/usage'),
+  getConversations:  () => api.get('/chat/conversations'),
+  saveConversations: (conversations) => api.put('/chat/conversations', { conversations }),
 }
 
 /**

@@ -119,16 +119,22 @@ confirm it streams an answer with sources.
 
 ## Accounts for the team
 
-One seeded account: **`Arunpandian@amgsol.com`** / `Arun@123` (Manager). Sign in
+One seeded account: **`Arunpandian@amgsol.com`** / `Arun@123` (Admin). Sign in
 with it, then go to **Admin → Team access** to add everyone else — email,
-temporary password, role. No code changes or redeploys needed to add/remove
-people; each person changes their own password after first login (key icon next
-to Sign out).
+temporary password, role (Admin/User). No code changes or redeploys needed to
+add/remove people; each person changes their own password after first login
+(key icon next to Sign out).
 
 ---
 
 ## Redeploying after code changes
 
-- **Vercel**: redeploys automatically on every push to the connected branch.
-- **Render**: same — auto-deploys on push. Manual redeploy button is in the
+- **Vercel**: see "Frontend deploys: use the Vercel CLI" above —
+  `npx vercel --prod --yes` from the repo root. Do not rely on git-push
+  auto-deploy or the dashboard "Redeploy" button for this project (seat-cost
+  gotcha, explained above).
+- **Cloud Run**: rerun the `gcloud run deploy` command from the top of this
+  file after backend code changes — it's not connected to a CI trigger, so
+  nothing deploys automatically on push.
+- **Render**: auto-deploys on push. Manual redeploy button is in the
   dashboard if you need to force one (e.g. after changing an env var).

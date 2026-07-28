@@ -278,9 +278,8 @@ function ConversationRow({
 }
 
 const ROLE_LABELS = {
-  manager: 'Manager',
-  lead_analyst: 'Lead Solar Analyst',
-  solar_analyst: 'Solar Analyst',
+  admin: 'Admin',
+  user: 'User',
 }
 
 const CATEGORIES = [
@@ -322,23 +321,23 @@ const SUGGESTIONS = [
   },
 ]
 
-const CONVERSATION_KEY = 'astra_conversations'
 const MAX_RECENT_CHATS = 10   // rolling queue — oldest (by creation) auto-deleted beyond this
 const MAX_FAVORITE_CHATS = 5  // permanent, never auto-evicted; only the owner can delete them
 
-function readConversations(userEmail) {
+// Conversations live server-side (per account, scoped by the JWT — see
+// backend/app/conversations.py), not in browser localStorage, so Recent and
+// Favorites are identical whichever browser or device you're signed in from.
+async function readConversations() {
   try {
-    const all = JSON.parse(localStorage.getItem(CONVERSATION_KEY) || '[]')
-    return all.filter((c) => c.userEmail === userEmail)
+    const { data } = await chatAPI.getConversations()
+    return data.conversations || []
   } catch {
     return []
   }
 }
 
-function writeConversations(userEmail, nextForUser) {
-  const all = JSON.parse(localStorage.getItem(CONVERSATION_KEY) || '[]')
-  const others = all.filter((c) => c.userEmail !== userEmail)
-  localStorage.setItem(CONVERSATION_KEY, JSON.stringify([...nextForUser, ...others]))
+function writeConversations(nextForUser) {
+  chatAPI.saveConversations(nextForUser).catch(() => {})
 }
 
 function titleFromMessages(messages) {
@@ -358,7 +357,7 @@ export default function Chat() {
   const [streaming, setStreaming] = useState(false)
   const [category, setCategory] = useState('All SOPs')
   const [sideTab, setSideTab] = useState('categories')
-  const [conversations, setConversations] = useState(() => readConversations(user.email))
+  const [conversations, setConversations] = useState([])
   const [activeConversationId, setActiveConversationId] = useState(null)
   const [renamingId, setRenamingId] = useState(null)
   const [renameValue, setRenameValue] = useState('')
@@ -396,6 +395,7 @@ export default function Chat() {
       }
     }).catch(() => {})
     chatAPI.stats().then(({ data }) => setKb(data)).catch(() => {})
+    readConversations().then(setConversations)
   }, [])
 
   useEffect(() => {
@@ -440,7 +440,7 @@ export default function Chat() {
         .slice(-MAX_RECENT_CHATS)
 
       const next = [...favorites, ...recents]
-      writeConversations(user.email, next)
+      writeConversations(next)
       return next
     })
   }, [activeConversationId, messages, streaming, user.email])
@@ -504,7 +504,7 @@ export default function Chat() {
 
   async function loadHistory() {
     setSideTab('history')
-    setConversations(readConversations(user.email))
+    setConversations(await readConversations())
   }
 
   function newChat() {
@@ -533,7 +533,7 @@ export default function Chat() {
         return prev
       }
       const next = prev.map((c) => (c.id === conversationId ? { ...c, favorite: !c.favorite } : c))
-      writeConversations(user.email, next)
+      writeConversations(next)
       return next
     })
   }
@@ -542,7 +542,7 @@ export default function Chat() {
     if (!confirm('Delete this chat? This cannot be undone.')) return
     setConversations((prev) => {
       const next = prev.filter((c) => c.id !== conversationId)
-      writeConversations(user.email, next)
+      writeConversations(next)
       return next
     })
     if (activeConversationId === conversationId) {
@@ -567,7 +567,7 @@ export default function Chat() {
       const next = prev.map((c) =>
         c.id === renamingId ? { ...c, title: trimmed || c.title, titleLocked: true } : c
       )
-      writeConversations(user.email, next)
+      writeConversations(next)
       return next
     })
     setRenamingId(null)
@@ -581,10 +581,6 @@ export default function Chat() {
   }
 
   function logout() {
-    // Only clear the auth session — NOT the whole localStorage. Chat history
-    // and favorites for every user on this browser live under one shared
-    // 'astra_conversations' key (filtered per-user on read), so a blanket
-    // localStorage.clear() here would silently wipe everyone's history.
     localStorage.removeItem('astra_token')
     localStorage.removeItem('astra_user')
     navigate('/login')
@@ -592,7 +588,7 @@ export default function Chat() {
 
   const firstName = user.name?.split(' ')[0] || 'there'
   const greeting = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'
-  const canAdmin = ['manager', 'lead_analyst'].includes(user.role)
+  const canAdmin = user.role === 'admin'
 
   const byRecentActivity = (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
   const favoriteConversations = conversations.filter((c) => c.favorite).sort(byRecentActivity)

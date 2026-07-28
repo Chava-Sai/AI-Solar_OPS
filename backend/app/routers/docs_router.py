@@ -28,7 +28,7 @@ async def upload_document(
     file: UploadFile = File(...),
     category: str = Form("General"),
     client_name: str = Form("All Clients"),
-    current_user: dict = Depends(require_role("manager", "lead_analyst")),
+    current_user: dict = Depends(require_role("admin")),
 ):
     ext = Path(file.filename).suffix.lower()
     if ext not in SUPPORTED_FORMATS:
@@ -78,7 +78,7 @@ def list_documents(current_user: dict = Depends(get_current_user)):
 @router.delete("/{filename}")
 def delete_document(
     filename: str,
-    current_user: dict = Depends(require_role("manager")),
+    current_user: dict = Depends(require_role("admin")),
 ):
     # Remove from vector store
     delete_document_chunks(filename)

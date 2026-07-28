@@ -2,7 +2,7 @@
 User + chat-history store.
 
 Users persist to a JSON file (USERS_FILE) rather than living in memory only —
-same pattern as app/usage.py — so accounts a manager adds via the Admin panel
+same pattern as app/usage.py — so accounts an admin adds via the Admin panel
 survive as long as the backend instance keeps running. A real database is the
 eventual replacement (see README's "Database design" section); this is a
 pragmatic step up from hardcoding accounts directly in this file.
@@ -19,7 +19,7 @@ from app.auth import hash_password
 logger = logging.getLogger(__name__)
 
 USERS_FILE = Path(os.getenv("USERS_DATA_PATH", "./users_data.json"))
-VALID_ROLES = ("manager", "lead_analyst", "solar_analyst")
+VALID_ROLES = ("admin", "user")
 
 _lock = threading.Lock()
 
@@ -30,7 +30,7 @@ def _seed_users() -> dict:
             "id": 1,
             "email": "Arunpandian@amgsol.com",
             "name": "Arun Pandian",
-            "role": "manager",
+            "role": "admin",
             "hashed_password": hash_password("Arun@123"),
         }
     }
@@ -98,9 +98,9 @@ def delete_user(email: str, requester_email: str):
             raise ValueError("User not found.")
         if key == requester_email.strip().lower():
             raise ValueError("You can't remove your own account.")
-        managers_left = sum(1 for u in _data["users"].values() if u["role"] == "manager")
-        if _data["users"][key]["role"] == "manager" and managers_left <= 1:
-            raise ValueError("Can't remove the last manager account.")
+        admins_left = sum(1 for u in _data["users"].values() if u["role"] == "admin")
+        if _data["users"][key]["role"] == "admin" and admins_left <= 1:
+            raise ValueError("Can't remove the last admin account.")
         del _data["users"][key]
         _save(_data)
 
@@ -138,10 +138,10 @@ def save_chat(user_email: str, user_name: str, query: str, answer: str):
 
 def get_history(user_email: str = None, role: str = None) -> list:
     """
-    Managers & Lead Analysts → see all history.
-    Solar Analysts → see only their own.
+    Admins → see everyone's history.
+    Users → see only their own.
     """
-    if role in ("manager", "lead_analyst"):
+    if role == "admin":
         return sorted(CHAT_HISTORY, key=lambda x: x["timestamp"], reverse=True)
     return sorted(
         [h for h in CHAT_HISTORY if h["user_email"] == user_email],

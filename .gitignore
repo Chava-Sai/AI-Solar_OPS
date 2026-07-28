@@ -15,6 +15,7 @@ frontend/dist/
 # ── runtime / local data (not needed for deploy) ────────
 backend/usage_data.json
 backend/users_data.json
+backend/conversations_data.json
 data/sop-documents/*
 !data/sop-documents/.gitkeep
 

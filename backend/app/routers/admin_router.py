@@ -1,7 +1,7 @@
 """
-Team/user management — manager-only.
+Team/user management — admin-only.
 
-Lets a manager add, list, and remove teammate accounts from the Admin panel
+Lets an admin add, list, and remove teammate accounts from the Admin panel
 directly, instead of hand-editing backend/app/database.py and redeploying.
 """
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,12 +14,12 @@ router = APIRouter()
 
 
 @router.get("/users", response_model=list[UserOut])
-def get_users(current_user: dict = Depends(require_role("manager"))):
+def get_users(current_user: dict = Depends(require_role("admin"))):
     return list_users()
 
 
 @router.post("/users", response_model=UserOut)
-def add_user(body: CreateUserRequest, current_user: dict = Depends(require_role("manager"))):
+def add_user(body: CreateUserRequest, current_user: dict = Depends(require_role("admin"))):
     try:
         return create_user(body.email, body.name or "", body.password, body.role)
     except ValueError as e:
@@ -27,7 +27,7 @@ def add_user(body: CreateUserRequest, current_user: dict = Depends(require_role(
 
 
 @router.delete("/users/{email}")
-def remove_user(email: str, current_user: dict = Depends(require_role("manager"))):
+def remove_user(email: str, current_user: dict = Depends(require_role("admin"))):
     try:
         delete_user(email, current_user["sub"])
     except ValueError as e:

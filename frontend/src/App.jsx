@@ -12,7 +12,7 @@ const AdminRoute = ({ children }) => {
   const token = localStorage.getItem('astra_token')
   const user  = JSON.parse(localStorage.getItem('astra_user') || '{}')
   if (!token) return <Navigate to="/login" replace />
-  if (!['manager', 'lead_analyst'].includes(user.role)) return <Navigate to="/" replace />
+  if (user.role !== 'admin') return <Navigate to="/" replace />
   return children
 }
 

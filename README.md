@@ -79,10 +79,10 @@ Events for streaming responses
   when a user's daily budget on that model is used up, with a visible notice
 - **Usage dashboard** (admin) — live per-user, per-model token/request consumption,
   plus real numbers pulled straight from Groq's own rate-limit headers
-- **Chat history** — a rolling 10-chat queue (oldest auto-evicted) per user, plus a
-  permanent 5-slot **favorites** list with rename support
-- **Role-based access** — Manager / Lead Analyst / Solar Analyst, enforced on both the
-  UI and the API
+- **Chat history** — server-side per account (not browser localStorage), so the same
+  rolling 10-chat queue (oldest auto-evicted) and permanent 5-slot **favorites** list
+  follow a user across any browser or device, like Claude/ChatGPT
+- **Role-based access** — Admin / User, enforced on both the UI and the API
 - **Admin document management** — drag-and-drop upload (PDF/DOCX/XLSX/PPTX/TXT),
   parsed → chunked → embedded → indexed automatically
 
@@ -114,10 +114,11 @@ backend/
 ├── main.py                    FastAPI app, CORS, startup checks
 ├── app/
 │   ├── auth.py                 JWT issuing/verification, role guards
-│   ├── database.py              user accounts + chat history (currently in-memory)
+│   ├── database.py              user accounts (JSON-file-backed) + team-wide history
+│   ├── conversations.py          per-account chat storage (Recent + Favorites)
 │   ├── usage.py                 per-user/per-model daily quota tracking
 │   ├── groq_meta.py              captures Groq's live rate-limit headers
-│   ├── routers/                  auth / chat (incl. SSE stream) / docs endpoints
+│   ├── routers/                  auth / chat (incl. SSE stream) / docs / admin endpoints
 │   ├── ingestion/                 parse → chunk → embed → store pipeline
 │   └── rag/
 │       ├── embedder.py            fastembed wrapper
@@ -179,19 +180,18 @@ Set these in `backend/.env` (see `backend/.env` for the full annotated template)
 
 ## Accounts & team access
 
-There's a single seeded account: **`Arunpandian@amgsol.com`** / `Arun@123` (Manager
+There's a single seeded account: **`Arunpandian@amgsol.com`** / `Arun@123` (Admin
 role). Everyone else is added from inside the app — no code changes or redeploys
 needed:
 
-1. Sign in as the manager → **Admin → Team access**.
-2. Fill in their email, a temporary password, and a role (Manager / Lead Analyst /
-   Solar Analyst) → **Add teammate**.
+1. Sign in as the admin → **Admin → Team access**.
+2. Fill in their email, a temporary password, and a role (Admin / User) →
+   **Add teammate**.
 3. They sign in with that temporary password, then change it themselves via the
    key icon next to Sign out in the sidebar (**Change password**).
 
-Roles: **Manager** — chat, upload/delete docs, full history, usage dashboard, team
-access. **Lead Analyst** — chat, upload docs, full history. **Solar Analyst** — chat,
-own history only.
+Two roles: **Admin** — chat, upload/delete docs, everyone's history, usage
+dashboard, team access. **User** — chat, own history only.
 
 Accounts persist to `backend/users_data.json` (see "Known limitations" below — this
 resets on backend restart until the database migration lands, same as chat
@@ -207,7 +207,7 @@ Currently indexed: **27 documents, 2,547 chunks, 34 cached FAQ entries.**
 | PV Technical, BESS | Solar PV / battery storage technical manuals and best-practice guides |
 | FAQ cache | Common technical Q&A, matched semantically so rephrased questions still hit |
 
-Upload more via **Admin → Upload documents** (any role with Manager/Lead access), or
+Upload more via **Admin → Upload documents** (admin role only), or
 from the command line:
 ```bash
 cd backend
