@@ -57,8 +57,11 @@ token streaming · lucide-react icons
 Events for streaming responses
 
 **AI / RAG**
-- LLM: [Groq](https://groq.com) — 4 models in a spend-priority chain: `gpt-oss-120b` →
-  `llama-3.3-70b-versatile` → `gpt-oss-20b` → `llama-3.1-8b-instant`
+- LLM: [Groq](https://groq.com) — 5 models across 3 families, spent in priority
+  order: `gpt-oss-120b` → `llama-3.3-70b-versatile` → `gpt-oss-20b` →
+  `qwen3.6-27b` → `llama-3.1-8b-instant`. The UI only ever shows the family name
+  (GPT-OSS / Llama / Qwen) — picking one cycles through its specific sizes,
+  each with its own budget, so raw model names never surface to end users.
 - Embeddings: [fastembed](https://github.com/qdrant/fastembed) (ONNX runtime,
   `sentence-transformers/all-MiniLM-L6-v2`, 384-dim) — chosen over the PyTorch
   `sentence-transformers` package specifically because it cuts backend RAM from
@@ -74,7 +77,7 @@ Events for streaming responses
 - **Source citations** — every answer shows which document(s) it's grounded in
 - **FAQ semantic cache** — common questions (parsed from the team's Q&A doc) are
   matched by meaning, not exact wording, and answered instantly for **zero LLM tokens**
-- **Per-model daily usage budgeting** — each of the 4 Groq models has its own free-tier
+- **Per-model daily usage budgeting** — each of the 5 Groq models has its own free-tier
   quota; the app spends the best model first and automatically falls over to the next
   when a user's daily budget on that model is used up, with a visible notice
 - **Usage dashboard** (admin) — live per-user, per-model token/request consumption,

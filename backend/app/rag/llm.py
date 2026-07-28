@@ -216,6 +216,13 @@ def _groq_stream(query: str, context: str, api_key: str, model_id: str | None = 
             # gpt-oss models burn hidden reasoning tokens — keep that minimal
             if model.startswith("openai/gpt-oss"):
                 kwargs["reasoning_effort"] = "low"
+            # Qwen3.6 reasons by default (visible <think> blocks + a large
+            # hidden token cost — measured ~200 reasoning tokens for a
+            # trivial answer); it only accepts "none"/"default" here, and
+            # "none" fully disables it, matching the other models' plain
+            # direct-answer behavior and keeping token spend comparable.
+            elif model.startswith("qwen/"):
+                kwargs["reasoning_effort"] = "none"
             # raw response → real rate-limit headers (live account state)
             raw = client.chat.completions.with_raw_response.create(**kwargs)
             capture_headers(model, raw.headers)

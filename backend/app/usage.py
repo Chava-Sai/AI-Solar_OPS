@@ -53,8 +53,26 @@ MODELS = {
         "user_tokens": 16000, "user_requests": 480,        # 500k TPD / 14.4k RPD
         "global_tpd": 500_000, "global_rpd": 14_400,
     },
+    "qwen27": {
+        "id": "qwen/qwen3.6-27b", "label": "Qwen3.6 27B",
+        "user_tokens": 6500, "user_requests": 30,          # 200k TPD / 1k RPD (verified live 2026-07-29, same bucket as gpt-oss)
+        "global_tpd": 200_000, "global_rpd": 1_000,
+    },
 }
-MODEL_ORDER = ["gpt120", "llama70", "gpt20", "llama8"]
+MODEL_ORDER = ["gpt120", "llama70", "gpt20", "qwen27", "llama8"]
+
+# Model families — purely a presentation grouping (spend priority above is
+# unaffected). The chat UI shows "GPT-OSS"/"Llama"/"Qwen" instead of raw
+# model names/sizes, which solar analysts have no reason to know the meaning
+# of; picking a family cycles through its members in MODEL_ORDER, well suited
+# for a small crew (each still spends its own individual per-model budget).
+FAMILIES = {
+    "gpt-oss": {"label": "GPT-OSS", "members": ["gpt120", "gpt20"]},
+    "llama":   {"label": "Llama",   "members": ["llama70", "llama8"]},
+    "qwen":    {"label": "Qwen",    "members": ["qwen27"]},
+}
+FAMILY_ORDER = ["gpt-oss", "llama", "qwen"]
+MODEL_TO_FAMILY = {m: f for f, spec in FAMILIES.items() for m in spec["members"]}
 
 _lock = threading.Lock()
 
@@ -128,6 +146,25 @@ def _model_snapshot(mu: dict, key: str) -> dict:
     }
 
 
+def _family_snapshot(models: dict, family_key: str) -> dict:
+    """Aggregate a family's member-model snapshots into one bar for the UI."""
+    members = FAMILIES[family_key]["members"]
+    tokens_used = sum(models[m]["tokens_used"] for m in members)
+    tokens_limit = sum(models[m]["tokens_limit"] for m in members)
+    requests_used = sum(models[m]["requests_used"] for m in members)
+    requests_limit = sum(models[m]["requests_limit"] for m in members)
+    return {
+        "label": FAMILIES[family_key]["label"],
+        "members": members,
+        "tokens_used": tokens_used,
+        "tokens_limit": tokens_limit,
+        "requests_used": requests_used,
+        "requests_limit": requests_limit,
+        "percent_used": min(100, round(tokens_used / tokens_limit * 100)) if tokens_limit else 0,
+        "exhausted": all(models[m]["exhausted"] for m in members),
+    }
+
+
 def get_usage(email: str) -> dict:
     """Full per-model snapshot for one user (powers the UI ring + popover)."""
     with _lock:
@@ -138,14 +175,18 @@ def get_usage(email: str) -> dict:
             models[key] = {
                 "label": MODELS[key]["label"],
                 "model_id": MODELS[key]["id"],
+                "family": MODEL_TO_FAMILY[key],
                 **_model_snapshot(u["models"][key], key),
             }
+        families = {f: _family_snapshot(models, f) for f in FAMILY_ORDER}
         total_used = sum(u["models"][k]["tokens"] for k in MODEL_ORDER)
         total_limit = sum(MODELS[k]["user_tokens"] for k in MODEL_ORDER)
         all_exhausted = all(models[k]["exhausted"] for k in MODEL_ORDER)
         return {
             "models": models,
             "model_order": MODEL_ORDER,
+            "families": families,
+            "family_order": FAMILY_ORDER,
             "tokens_used_total": total_used,
             "tokens_limit_total": total_limit,
             "percent_used": min(100, round(

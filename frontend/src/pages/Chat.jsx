@@ -34,19 +34,41 @@ function formatReset(seconds) {
   return h > 0 ? `Resets in ${h} hr ${m} min` : `Resets in ${m} min`
 }
 
-/** Build the model choice list dynamically from the usage snapshot. */
-function modelChoices(usage) {
-  const base = [{ key: null, label: 'Auto', short: 'Auto', hint: 'Best available model first' }]
-  if (!usage?.model_order) return base
-  return base.concat(usage.model_order.map((key) => {
-    const m = usage.models[key]
-    return {
-      key,
-      label: m.label,
-      short: m.label.split(' ').pop(), // "GPT-OSS 120B" → "120B", "Llama 3.1 8B" → "8B"
-      hint: `${m.tokens_limit.toLocaleString()} tokens/day`,
-    }
+/**
+ * Group models into families for the picker — solar analysts pick "GPT-OSS"
+ * or "Llama", not a wall of raw model names/sizes. Clicking a family cycles
+ * through its specific models (MODEL_ORDER priority order within the
+ * family), mirroring how Claude's chat switches model versions.
+ */
+function familyList(usage) {
+  if (!usage?.family_order) return []
+  return usage.family_order.map((key) => ({
+    key,
+    label: usage.families[key].label,
+    members: usage.families[key].members,
+    percentUsed: usage.families[key].percent_used,
+    exhausted: usage.families[key].exhausted,
   }))
+}
+
+function shortLabel(fullLabel) {
+  return fullLabel.split(' ').pop() // "GPT-OSS 120B" → "120B", "Llama 3.1 8B" → "8B"
+}
+
+/** Which specific member of this family is currently selected, if any. */
+function activeMemberOf(family, modelPref) {
+  return family.members.includes(modelPref) ? modelPref : null
+}
+
+/** Clicking a family: pick its best available member, or cycle to the next
+ *  one if a member of this family is already selected. */
+function nextFamilyPick(usage, family, modelPref) {
+  const active = activeMemberOf(family, modelPref)
+  if (active) {
+    const i = family.members.indexOf(active)
+    return family.members[(i + 1) % family.members.length]
+  }
+  return family.members.find((m) => !usage.models[m]?.exhausted) || family.members[0]
 }
 
 /** Self-service password change — same backdrop/panel pattern as the usage ring popover. */
@@ -139,7 +161,6 @@ function UsageRing({ usage, modelPref, onPickModel }) {
   const r = 8.5
   const c = 2 * Math.PI * r
   const tone = usage.limit_reached ? 'limit' : pct >= 75 ? 'warn' : 'ok'
-  const order = usage.model_order || []
 
   return (
     <div className="usage-anchor">
@@ -171,23 +192,18 @@ function UsageRing({ usage, modelPref, onPickModel }) {
               <small>{formatReset(usage.resets_in_seconds)}</small>
             </div>
 
-            {order.map((key) => {
-              const m = usage.models[key]
-              if (!m) return null
-              const mTone = m.exhausted ? 'limit' : m.percent_used >= 75 ? 'warn' : 'ok'
+            {familyList(usage).map((fam) => {
+              const fTone = fam.exhausted ? 'limit' : fam.percentUsed >= 75 ? 'warn' : 'ok'
               return (
-                <div key={key} className="usage-row">
+                <div key={fam.key} className="usage-row">
                   <div className="usage-row-top">
-                    <span>{m.label}</span>
-                    <strong>{m.exhausted ? 'Limit reached' : `${m.percent_used}%`}</strong>
+                    <span>{fam.label}</span>
+                    <strong>{fam.exhausted ? 'Limit reached' : `${fam.percentUsed}%`}</strong>
                   </div>
                   <div className="usage-bar">
-                    <div className={`usage-bar-fill ${mTone}`} style={{ width: `${m.percent_used}%` }} />
+                    <div className={`usage-bar-fill ${fTone}`} style={{ width: `${fam.percentUsed}%` }} />
                   </div>
-                  <small>
-                    {m.tokens_used.toLocaleString()} / {m.tokens_limit.toLocaleString()} tokens ·{' '}
-                    {m.requests_used}/{m.requests_limit} requests
-                  </small>
+                  <small>Combined across {fam.members.length > 1 ? `all ${fam.label} sizes` : fam.label}</small>
                 </div>
               )
             })}
@@ -201,20 +217,38 @@ function UsageRing({ usage, modelPref, onPickModel }) {
               <span>Model preference</span>
             </div>
             <div className="model-choice-list">
-              {modelChoices(usage).map((c2) => {
-                const exhausted = Boolean(c2.key && usage.models[c2.key]?.exhausted)
+              <button
+                className={`model-choice ${modelPref === null ? 'active' : ''}`}
+                onClick={() => { onPickModel(null); setOpen(false) }}
+              >
+                <span>
+                  Auto
+                  <small>Best available model first</small>
+                </span>
+                {modelPref === null && <Check size={15} />}
+              </button>
+              {familyList(usage).map((fam) => {
+                const active = activeMemberOf(fam, modelPref)
+                const activeModel = active ? usage.models[active] : null
                 return (
                   <button
-                    key={c2.label}
-                    className={`model-choice ${modelPref === c2.key ? 'active' : ''}`}
-                    disabled={exhausted}
-                    onClick={() => { onPickModel(c2.key); setOpen(false) }}
+                    key={fam.key}
+                    className={`model-choice ${active ? 'active' : ''}`}
+                    disabled={fam.exhausted}
+                    onClick={() => onPickModel(nextFamilyPick(usage, fam, modelPref))}
+                    title={fam.members.length > 1 ? `Click to cycle through ${fam.label} sizes` : undefined}
                   >
                     <span>
-                      {c2.label}
-                      <small>{exhausted ? 'Daily limit reached' : c2.hint}</small>
+                      {fam.label}
+                      <small>
+                        {fam.exhausted
+                          ? 'Daily limit reached'
+                          : activeModel
+                            ? `Using ${shortLabel(activeModel.label)} · ${activeModel.percent_used}% used`
+                            : `${fam.percentUsed}% used today`}
+                      </small>
                     </span>
-                    {modelPref === c2.key && <Check size={15} />}
+                    {active && <Check size={15} />}
                   </button>
                 )
               })}
@@ -231,6 +265,22 @@ function ConversationRow({
   conversation, isActive, isRenaming, renameValue, favoritesFull,
   onOpen, onToggleFavorite, onStartRename, onRenameChange, onCommitRename, onCancelRename, onDelete,
 }) {
+  const titleWrapRef = useRef(null)
+  const [scrollPx, setScrollPx] = useState(0)
+
+  // Long titles are ellipsis-truncated by default (so the favorite/rename/
+  // delete icons never get squeezed out) — hovering slides the text left by
+  // exactly its hidden overflow so the full title becomes readable.
+  function handleTitleEnter() {
+    const el = titleWrapRef.current
+    if (!el) return
+    const overflow = el.scrollWidth - el.clientWidth
+    if (overflow > 0) setScrollPx(overflow)
+  }
+  function handleTitleLeave() {
+    setScrollPx(0)
+  }
+
   return (
     <div className={`history-item ${isActive ? 'active' : ''}`}>
       {isRenaming ? (
@@ -247,7 +297,16 @@ function ConversationRow({
         />
       ) : (
         <button className="history-item-main" onClick={onOpen}>
-          <span>{conversation.title}</span>
+          <span
+            className="history-item-title-wrap"
+            ref={titleWrapRef}
+            onMouseEnter={handleTitleEnter}
+            onMouseLeave={handleTitleLeave}
+          >
+            <span className="history-item-title" style={{ transform: `translateX(-${scrollPx}px)` }}>
+              {conversation.title}
+            </span>
+          </span>
           <small>{new Date(conversation.updatedAt).toLocaleDateString()}</small>
         </button>
       )}
@@ -848,19 +907,35 @@ export default function Chat() {
           <div className="composer-model-row">
             <span>Model</span>
             <div className="model-segment" role="radiogroup" aria-label="Model preference">
-              {modelChoices(usage).map((c2) => {
-                const m = c2.key ? usage?.models?.[c2.key] : null
-                const exhausted = Boolean(m?.exhausted)
+              <button
+                className={modelPref === null ? 'active' : ''}
+                title="Auto — best available model first"
+                onClick={() => setModelPref(null)}
+              >
+                Auto
+              </button>
+              {usage && familyList(usage).map((fam) => {
+                const active = activeMemberOf(fam, modelPref)
+                const activeModel = active ? usage.models[active] : null
+                const multi = fam.members.length > 1
                 return (
                   <button
-                    key={c2.label}
-                    className={modelPref === c2.key ? 'active' : ''}
-                    disabled={exhausted}
-                    title={exhausted ? `${c2.label} daily limit reached` : `${c2.label} — ${c2.hint}`}
-                    onClick={() => setModelPref(c2.key)}
+                    key={fam.key}
+                    className={active ? 'active' : ''}
+                    disabled={fam.exhausted}
+                    title={
+                      fam.exhausted
+                        ? `${fam.label} daily limit reached`
+                        : multi
+                          ? `${fam.label} — click to cycle sizes (currently ${activeModel ? shortLabel(activeModel.label) : shortLabel(usage.models[fam.members[0]].label)})`
+                          : `${fam.label} — ${fam.percentUsed}% used`
+                    }
+                    onClick={() => setModelPref(nextFamilyPick(usage, fam, modelPref))}
                   >
-                    {c2.short}
-                    {m && <span className="seg-pct">{exhausted ? 'Limit' : `${m.percent_used}%`}</span>}
+                    {fam.label}
+                    {active && <small className="seg-size">{shortLabel(activeModel.label)}</small>}
+                    {multi && <ChevronRight size={11} className="seg-cycle" />}
+                    <span className="seg-pct">{fam.exhausted ? 'Limit' : `${fam.percentUsed}%`}</span>
                   </button>
                 )
               })}
