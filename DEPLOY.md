@@ -72,7 +72,35 @@ gcloud run deploy astra-ai-backend \
      `https://astra-ai-solarops.vercel.app` (comma-separate multiple origins)
 4. Deploy. Health check: `https://<your-service>.onrender.com/health`
 
-## 2. Frontend → Vercel
+### ⚠️ Frontend deploys: use the Vercel CLI, not the dashboard "Redeploy" button
+
+Vercel's Git integration blocks deploys pushed under a GitHub identity that
+isn't already a paid AMGSOL Vercel team member ("commit email could not be
+matched" / "not a member of your team"). The dashboard's "Redeploy" button
+*will* get past this — but it does so by silently adding that GitHub account
+as a Team Member, which is a **recurring $20/month seat charge**. Don't use it
+for that purpose.
+
+Instead, deploy straight from the local code via the Vercel CLI, authenticated
+as the `amgsol2025-4389` account — this bypasses the GitHub commit-author
+check entirely (no git push involved) and costs nothing:
+
+```bash
+# one-time: authenticate the CLI as amgsol2025-4389 (device-code login,
+# approve in a browser tab that's signed in as that account)
+npx vercel login
+
+# one-time per machine: link this repo to the existing Vercel project
+# (run from the REPO ROOT, not frontend/ — the project's Root Directory
+# setting is already "frontend" server-side, so linking from inside
+# frontend/ makes it look for frontend/frontend and fails)
+npx vercel link --yes --project ags-astra-solar-ops --scope amgsols-projects
+
+# every deploy after that:
+npx vercel --prod --yes
+```
+
+## 2. Frontend → Vercel (initial dashboard import only)
 
 1. Go to [vercel.com](https://vercel.com) → **Add New → Project** → import the
    same repo → set **Root Directory** to `frontend`.
