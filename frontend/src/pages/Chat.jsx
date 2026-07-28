@@ -498,7 +498,12 @@ export default function Chat() {
   }
 
   function logout() {
-    localStorage.clear()
+    // Only clear the auth session — NOT the whole localStorage. Chat history
+    // and favorites for every user on this browser live under one shared
+    // 'astra_conversations' key (filtered per-user on read), so a blanket
+    // localStorage.clear() here would silently wipe everyone's history.
+    localStorage.removeItem('astra_token')
+    localStorage.removeItem('astra_user')
     navigate('/login')
   }
 
