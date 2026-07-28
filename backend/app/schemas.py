@@ -12,6 +12,23 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     user: dict
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+# ── Admin: user management ─────────────────────────────
+class CreateUserRequest(BaseModel):
+    email: str
+    name: Optional[str] = None
+    password: str
+    role: str
+
+class UserOut(BaseModel):
+    id: int
+    email: str
+    name: str
+    role: str
+
 # ── Chat ──────────────────────────────────────────────
 class ChatRequest(BaseModel):
     query: str

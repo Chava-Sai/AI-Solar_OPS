@@ -29,6 +29,14 @@ api.interceptors.response.use(
 
 export const authAPI = {
   login: (email, password) => api.post('/auth/login', { email, password }),
+  changePassword: (current_password, new_password) =>
+    api.post('/auth/change-password', { current_password, new_password }),
+}
+
+export const adminAPI = {
+  listUsers:  () => api.get('/admin/users'),
+  createUser: (email, name, password, role) => api.post('/admin/users', { email, name, password, role }),
+  deleteUser: (email) => api.delete(`/admin/users/${encodeURIComponent(email)}`),
 }
 
 export const chatAPI = {

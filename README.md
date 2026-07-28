@@ -21,7 +21,7 @@
 - [Project structure](#project-structure)
 - [Running it locally](#running-it-locally)
 - [Environment variables](#environment-variables)
-- [Test accounts](#test-accounts)
+- [Accounts & team access](#accounts--team-access)
 - [Knowledge base](#knowledge-base)
 - [Deployment](#deployment)
 - [Database design (Supabase migration — in progress)](#database-design-supabase-migration--in-progress)
@@ -177,15 +177,25 @@ Set these in `backend/.env` (see `backend/.env` for the full annotated template)
 | `ALLOWED_ORIGINS` | For prod | Comma-separated extra CORS origins (e.g. your Vercel URL) |
 | `CHROMA_DB_PATH` / `DOCS_UPLOAD_PATH` / `USAGE_DATA_PATH` | No | Override storage paths |
 
-## Test accounts
+## Accounts & team access
 
-Password for **all accounts**: `test1234`
+There's a single seeded account: **`Arunpandian@amgsol.com`** / `Arun@123` (Manager
+role). Everyone else is added from inside the app — no code changes or redeploys
+needed:
 
-| Email | Role |
-|---|---|
-| `test1@ags.com` | **Manager** — chat, upload/delete docs, full history, usage dashboard |
-| `test2@ags.com`, `test3@ags.com` | Lead Analyst — chat, upload docs, full history |
-| `test4@ags.com` – `test10@ags.com` | Solar Analyst — chat, own history |
+1. Sign in as the manager → **Admin → Team access**.
+2. Fill in their email, a temporary password, and a role (Manager / Lead Analyst /
+   Solar Analyst) → **Add teammate**.
+3. They sign in with that temporary password, then change it themselves via the
+   key icon next to Sign out in the sidebar (**Change password**).
+
+Roles: **Manager** — chat, upload/delete docs, full history, usage dashboard, team
+access. **Lead Analyst** — chat, upload docs, full history. **Solar Analyst** — chat,
+own history only.
+
+Accounts persist to `backend/users_data.json` (see "Known limitations" below — this
+resets on backend restart until the database migration lands, same as chat
+history/usage).
 
 ## Knowledge base
 
@@ -235,8 +245,8 @@ meaningfully more mature/reliable in Python than their JS equivalents.
 
 ## Known limitations / open decisions
 
-- **Persistence**: see above — chat history/usage resets on backend restart until the
-  Supabase migration lands. Applies the same way on Cloud Run as it did on Render,
-  until that's done.
+- **Persistence**: see above — chat history/usage/team accounts reset on backend
+  restart until the Supabase migration lands. Applies the same way on Cloud Run as
+  it did on Render, until that's done.
 - **Token accounting is estimated** where Groq doesn't return exact counts (a rare
   fallback path); the primary path uses Groq's real per-call token counts.

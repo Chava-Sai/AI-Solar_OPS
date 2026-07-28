@@ -1,93 +1,125 @@
 """
-In-memory database for demo.
-Will be replaced with PostgreSQL + ChromaDB in production.
+User + chat-history store.
+
+Users persist to a JSON file (USERS_FILE) rather than living in memory only —
+same pattern as app/usage.py — so accounts a manager adds via the Admin panel
+survive as long as the backend instance keeps running. A real database is the
+eventual replacement (see README's "Database design" section); this is a
+pragmatic step up from hardcoding accounts directly in this file.
 """
-from app.auth import hash_password
+import os
+import json
+import logging
+import threading
 from datetime import datetime
+from pathlib import Path
 
-# ── Pre-seeded users (team pilot / test accounts) ──────
-# Password for every account below: test1234
-TEST_PASSWORD = "test1234"
+from app.auth import hash_password
 
-USERS = {
-    "test1@ags.com": {
-        "id": 1,
-        "email": "test1@ags.com",
-        "name": "Test User 1",
-        "role": "manager",
-        "hashed_password": hash_password(TEST_PASSWORD),
-    },
-    "test2@ags.com": {
-        "id": 2,
-        "email": "test2@ags.com",
-        "name": "Test User 2",
-        "role": "lead_analyst",
-        "hashed_password": hash_password(TEST_PASSWORD),
-    },
-    "test3@ags.com": {
-        "id": 3,
-        "email": "test3@ags.com",
-        "name": "Test User 3",
-        "role": "lead_analyst",
-        "hashed_password": hash_password(TEST_PASSWORD),
-    },
-    "test4@ags.com": {
-        "id": 4,
-        "email": "test4@ags.com",
-        "name": "Test User 4",
-        "role": "solar_analyst",
-        "hashed_password": hash_password(TEST_PASSWORD),
-    },
-    "test5@ags.com": {
-        "id": 5,
-        "email": "test5@ags.com",
-        "name": "Test User 5",
-        "role": "solar_analyst",
-        "hashed_password": hash_password(TEST_PASSWORD),
-    },
-    "test6@ags.com": {
-        "id": 6,
-        "email": "test6@ags.com",
-        "name": "Test User 6",
-        "role": "solar_analyst",
-        "hashed_password": hash_password(TEST_PASSWORD),
-    },
-    "test7@ags.com": {
-        "id": 7,
-        "email": "test7@ags.com",
-        "name": "Test User 7",
-        "role": "solar_analyst",
-        "hashed_password": hash_password(TEST_PASSWORD),
-    },
-    "test8@ags.com": {
-        "id": 8,
-        "email": "test8@ags.com",
-        "name": "Test User 8",
-        "role": "solar_analyst",
-        "hashed_password": hash_password(TEST_PASSWORD),
-    },
-    "test9@ags.com": {
-        "id": 9,
-        "email": "test9@ags.com",
-        "name": "Test User 9",
-        "role": "solar_analyst",
-        "hashed_password": hash_password(TEST_PASSWORD),
-    },
-    "test10@ags.com": {
-        "id": 10,
-        "email": "test10@ags.com",
-        "name": "Test User 10",
-        "role": "solar_analyst",
-        "hashed_password": hash_password(TEST_PASSWORD),
-    },
-}
+logger = logging.getLogger(__name__)
 
-# ── In-memory chat history ─────────────────────────────
+USERS_FILE = Path(os.getenv("USERS_DATA_PATH", "./users_data.json"))
+VALID_ROLES = ("manager", "lead_analyst", "solar_analyst")
+
+_lock = threading.Lock()
+
+
+def _seed_users() -> dict:
+    return {
+        "arunpandian@amgsol.com": {
+            "id": 1,
+            "email": "Arunpandian@amgsol.com",
+            "name": "Arun Pandian",
+            "role": "manager",
+            "hashed_password": hash_password("Arun@123"),
+        }
+    }
+
+
+def _load() -> dict:
+    if USERS_FILE.exists():
+        try:
+            data = json.loads(USERS_FILE.read_text())
+            if data.get("users"):
+                return data
+        except Exception:
+            pass
+    return {"users": _seed_users(), "next_id": 2}
+
+
+def _save(data: dict):
+    try:
+        USERS_FILE.write_text(json.dumps(data, indent=2))
+    except Exception as e:
+        logger.error(f"[Users] Failed to persist users: {e}")
+
+
+_data = _load()
+_save(_data)  # persist the seed account on first boot
+
+
+def get_user(email: str):
+    return _data["users"].get(email.strip().lower())
+
+
+def list_users() -> list:
+    return [
+        {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"]}
+        for u in sorted(_data["users"].values(), key=lambda u: u["id"])
+    ]
+
+
+def create_user(email: str, name: str, password: str, role: str) -> dict:
+    key = email.strip().lower()
+    if role not in VALID_ROLES:
+        raise ValueError(f"Invalid role '{role}'. Must be one of {VALID_ROLES}.")
+    if len(password) < 6:
+        raise ValueError("Password must be at least 6 characters.")
+    with _lock:
+        if key in _data["users"]:
+            raise ValueError(f"An account with email '{email}' already exists.")
+        user = {
+            "id": _data["next_id"],
+            "email": email.strip(),
+            "name": name.strip() or email.split("@")[0],
+            "role": role,
+            "hashed_password": hash_password(password),
+        }
+        _data["users"][key] = user
+        _data["next_id"] += 1
+        _save(_data)
+        return {"id": user["id"], "email": user["email"], "name": user["name"], "role": user["role"]}
+
+
+def delete_user(email: str, requester_email: str):
+    key = email.strip().lower()
+    with _lock:
+        if key not in _data["users"]:
+            raise ValueError("User not found.")
+        if key == requester_email.strip().lower():
+            raise ValueError("You can't remove your own account.")
+        managers_left = sum(1 for u in _data["users"].values() if u["role"] == "manager")
+        if _data["users"][key]["role"] == "manager" and managers_left <= 1:
+            raise ValueError("Can't remove the last manager account.")
+        del _data["users"][key]
+        _save(_data)
+
+
+def update_password(email: str, new_password: str):
+    key = email.strip().lower()
+    if len(new_password) < 6:
+        raise ValueError("Password must be at least 6 characters.")
+    with _lock:
+        if key not in _data["users"]:
+            raise ValueError("User not found.")
+        _data["users"][key]["hashed_password"] = hash_password(new_password)
+        _save(_data)
+
+
+# ── In-memory chat history (team-wide History tab) ─────
 CHAT_HISTORY: list = []
 _chat_id_counter = 1
 
-def get_user(email: str):
-    return USERS.get(email)
 
 def save_chat(user_email: str, user_name: str, query: str, answer: str):
     global _chat_id_counter
@@ -102,6 +134,7 @@ def save_chat(user_email: str, user_name: str, query: str, answer: str):
     CHAT_HISTORY.append(record)
     _chat_id_counter += 1
     return record
+
 
 def get_history(user_email: str = None, role: str = None) -> list:
     """

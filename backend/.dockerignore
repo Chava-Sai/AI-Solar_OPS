@@ -4,5 +4,6 @@ __pycache__/
 *.pyc
 .env
 usage_data.json
+users_data.json
 scripts/
 .env.example

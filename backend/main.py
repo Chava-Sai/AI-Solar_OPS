@@ -9,6 +9,7 @@ from app.config import settings
 from app.routers.auth_router import router as auth_router
 from app.routers.chat_router import router as chat_router
 from app.routers.docs_router import router as docs_router
+from app.routers.admin_router import router as admin_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -57,6 +58,7 @@ def _log_knowledge_base_state():
 app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(chat_router, prefix="/api/chat", tags=["Chat"])
 app.include_router(docs_router, prefix="/api/docs", tags=["Documents"])
+app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
 
 
 @app.get("/health", tags=["Health"])

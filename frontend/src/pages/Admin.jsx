@@ -14,11 +14,12 @@ import {
   Shield,
   Trash2,
   UploadCloud,
+  UserPlus,
   Users,
   XCircle,
   Zap,
 } from 'lucide-react'
-import { chatAPI, docsAPI } from '../api/client'
+import { adminAPI, chatAPI, docsAPI } from '../api/client'
 import agsLogo from '../assets/ags-logo-hero-dark.png'
 
 function formatReset(seconds) {
@@ -73,8 +74,14 @@ export default function Admin() {
   const [client, setClient] = useState('All Clients')
   const [dragging, setDragging] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [view, setView] = useState('docs') // 'docs' | 'usage'
+  const [view, setView] = useState('docs') // 'docs' | 'usage' | 'team'
   const [teamUsage, setTeamUsage] = useState(null)
+
+  const [teamUsers, setTeamUsers] = useState([])
+  const [teamLoading, setTeamLoading] = useState(false)
+  const [teamError, setTeamError] = useState('')
+  const [newUser, setNewUser] = useState({ email: '', name: '', password: '', role: 'solar_analyst' })
+  const [addingUser, setAddingUser] = useState(false)
 
   useEffect(() => {
     loadDocs()
@@ -86,6 +93,47 @@ export default function Admin() {
     const t = setInterval(loadTeamUsage, 30000) // live refresh every 30s
     return () => clearInterval(t)
   }, [view])
+
+  useEffect(() => {
+    if (view === 'team') loadTeamUsers()
+  }, [view])
+
+  async function loadTeamUsers() {
+    setTeamLoading(true)
+    try {
+      const { data } = await adminAPI.listUsers()
+      setTeamUsers(data)
+    } catch {
+      setTeamUsers([])
+    } finally {
+      setTeamLoading(false)
+    }
+  }
+
+  async function handleAddUser(e) {
+    e.preventDefault()
+    setTeamError('')
+    setAddingUser(true)
+    try {
+      await adminAPI.createUser(newUser.email, newUser.name, newUser.password, newUser.role)
+      setNewUser({ email: '', name: '', password: '', role: 'solar_analyst' })
+      loadTeamUsers()
+    } catch (err) {
+      setTeamError(err.response?.data?.detail || 'Could not add user.')
+    } finally {
+      setAddingUser(false)
+    }
+  }
+
+  async function handleDeleteUser(email) {
+    if (!confirm(`Remove access for "${email}"?`)) return
+    try {
+      await adminAPI.deleteUser(email)
+      loadTeamUsers()
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Could not remove user.')
+    }
+  }
 
   async function loadTeamUsage() {
     try {
@@ -189,6 +237,12 @@ export default function Admin() {
           <Activity size={17} />
           Usage dashboard
         </button>
+        {user.role === 'manager' && (
+          <button className={`rail-link ${view === 'team' ? 'active' : ''}`} onClick={() => setView('team')}>
+            <UserPlus size={17} />
+            Team access
+          </button>
+        )}
         <button className="rail-link" onClick={() => navigate('/')}>
           <ArrowLeft size={17} />
           Back to chat
@@ -217,15 +271,23 @@ export default function Admin() {
       <main className="admin-main">
         <header className="admin-header">
           <div>
-            <p className="eyebrow">{view === 'docs' ? 'Document operations' : 'Model consumption'}</p>
-            <h1>{view === 'docs' ? 'Knowledge Base Management' : 'Usage Dashboard'}</h1>
+            <p className="eyebrow">
+              {view === 'docs' ? 'Document operations' : view === 'usage' ? 'Model consumption' : 'Access control'}
+            </p>
+            <h1>{view === 'docs' ? 'Knowledge Base Management' : view === 'usage' ? 'Usage Dashboard' : 'Team Access'}</h1>
             <span>
               {view === 'docs'
                 ? 'Upload SOPs, monitor ingestion, and control what the assistant can retrieve.'
-                : 'Live view of Groq free-tier budgets, per-user consumption, and FAQ savings.'}
+                : view === 'usage'
+                ? 'Live view of Groq free-tier budgets, per-user consumption, and FAQ savings.'
+                : 'Add teammates and manage who can sign in — no code changes needed.'}
             </span>
           </div>
-          <button className="subtle-button" onClick={view === 'docs' ? loadDocs : loadTeamUsage} disabled={loading}>
+          <button
+            className="subtle-button"
+            onClick={view === 'docs' ? loadDocs : view === 'usage' ? loadTeamUsage : loadTeamUsers}
+            disabled={loading}
+          >
             <RefreshCw size={15} className={loading ? 'spin' : ''} />
             Refresh
           </button>
@@ -362,6 +424,142 @@ export default function Admin() {
                   )}
                 </div>
               </>
+            )}
+          </section>
+        )}
+
+        {view === 'team' && (
+          <section className="admin-grid">
+            <div className="ops-card upload-card">
+              <div className="card-heading">
+                <div className="card-icon"><UserPlus size={20} /></div>
+                <div>
+                  <h2>Add a teammate</h2>
+                  <p>They can sign in immediately and change their password after logging in.</p>
+                </div>
+              </div>
+
+              <form className="auth-form" onSubmit={handleAddUser}>
+                <label>
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    required
+                    value={newUser.email}
+                    onChange={(e) => setNewUser((u) => ({ ...u, email: e.target.value }))}
+                    placeholder="name@amgsol.com"
+                  />
+                </label>
+                <label>
+                  <span>Full name</span>
+                  <input
+                    value={newUser.name}
+                    onChange={(e) => setNewUser((u) => ({ ...u, name: e.target.value }))}
+                    placeholder="Optional — defaults to the email"
+                  />
+                </label>
+                <label>
+                  <span>Temporary password</span>
+                  <input
+                    type="text"
+                    required
+                    minLength={6}
+                    value={newUser.password}
+                    onChange={(e) => setNewUser((u) => ({ ...u, password: e.target.value }))}
+                    placeholder="At least 6 characters"
+                  />
+                </label>
+                <label>
+                  <span>Role</span>
+                  <select
+                    value={newUser.role}
+                    onChange={(e) => setNewUser((u) => ({ ...u, role: e.target.value }))}
+                  >
+                    <option value="manager">Manager</option>
+                    <option value="lead_analyst">Lead Analyst</option>
+                    <option value="solar_analyst">Solar Analyst</option>
+                  </select>
+                </label>
+
+                {teamError && <div className="error-banner">{teamError}</div>}
+
+                <button type="submit" className="cta-button" disabled={addingUser}>
+                  {addingUser ? 'Adding…' : 'Add teammate'}
+                  <UserPlus size={16} />
+                </button>
+              </form>
+            </div>
+
+            <div className="ops-card health-card">
+              <div className="card-heading">
+                <div className="card-icon"><Shield size={20} /></div>
+                <div>
+                  <h2>Roles</h2>
+                  <p>What each role can do in Astra AI.</p>
+                </div>
+              </div>
+              <div className="health-list">
+                <div>
+                  <span>Manager</span>
+                  <strong>Chat, docs, usage, team access</strong>
+                </div>
+                <div>
+                  <span>Lead Analyst</span>
+                  <strong>Chat, upload docs, full history</strong>
+                </div>
+                <div>
+                  <span>Solar Analyst</span>
+                  <strong>Chat, own history only</strong>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {view === 'team' && (
+          <section className="ops-card documents-card">
+            <div className="documents-card-header">
+              <div>
+                <h2>Everyone with access</h2>
+                <p>{teamUsers.length} account{teamUsers.length === 1 ? '' : 's'}</p>
+              </div>
+            </div>
+
+            {teamLoading ? (
+              <div className="empty-state">
+                <Users size={30} />
+                <strong>Loading team…</strong>
+              </div>
+            ) : (
+              <div className="doc-table">
+                <div className="doc-table-head">
+                  <span>Name</span>
+                  <span>Email</span>
+                  <span>Role</span>
+                  <span />
+                  <span />
+                </div>
+                {teamUsers.map((u) => (
+                  <div key={u.id} className="doc-row">
+                    <span className="doc-name">{u.name}</span>
+                    <span>{u.email}</span>
+                    <span className="tag">{u.role.replace('_', ' ')}</span>
+                    <span />
+                    {u.email.toLowerCase() === user.email?.toLowerCase() ? (
+                      <span />
+                    ) : (
+                      <button
+                        className="danger-icon"
+                        onClick={() => handleDeleteUser(u.email)}
+                        title="Remove access"
+                        aria-label={`Remove ${u.email}`}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </section>
         )}

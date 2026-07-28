@@ -11,6 +11,7 @@ import {
   Clock3,
   Database,
   History,
+  KeyRound,
   LogOut,
   MessageSquarePlus,
   PanelLeftClose,
@@ -23,7 +24,7 @@ import {
   Trash2,
   Zap,
 } from 'lucide-react'
-import { chatAPI, streamChat } from '../api/client'
+import { authAPI, chatAPI, streamChat } from '../api/client'
 import agsLogo from '../assets/ags-logo-hero-dark.png'
 
 function formatReset(seconds) {
@@ -46,6 +47,88 @@ function modelChoices(usage) {
       hint: `${m.tokens_limit.toLocaleString()} tokens/day`,
     }
   }))
+}
+
+/** Self-service password change — same backdrop/panel pattern as the usage ring popover. */
+function ChangePasswordButton() {
+  const [open, setOpen] = useState(false)
+  const [currentPw, setCurrentPw] = useState('')
+  const [newPw, setNewPw] = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [done, setDone] = useState(false)
+
+  function toggle() {
+    setOpen((v) => !v)
+    setCurrentPw('')
+    setNewPw('')
+    setConfirmPw('')
+    setError('')
+    setDone(false)
+  }
+
+  async function submit(e) {
+    e.preventDefault()
+    setError('')
+    if (newPw.length < 6) return setError('New password must be at least 6 characters.')
+    if (newPw !== confirmPw) return setError('New passwords do not match.')
+    setSaving(true)
+    try {
+      await authAPI.changePassword(currentPw, newPw)
+      setDone(true)
+      setCurrentPw('')
+      setNewPw('')
+      setConfirmPw('')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not update password.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="usage-anchor">
+      <button className="icon-button" onClick={toggle} title="Change password" aria-label="Change password">
+        <KeyRound size={17} />
+      </button>
+      {open && (
+        <>
+          <div className="usage-backdrop" onClick={() => setOpen(false)} />
+          <div className="usage-panel" role="dialog" aria-label="Change password">
+            <div className="usage-panel-head">
+              <span>Change password</span>
+            </div>
+            {done ? (
+              <div className="empty-state">
+                <Check size={22} />
+                <strong>Password updated</strong>
+              </div>
+            ) : (
+              <form className="auth-form" onSubmit={submit}>
+                <label>
+                  <span>Current password</span>
+                  <input type="password" required value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} />
+                </label>
+                <label>
+                  <span>New password</span>
+                  <input type="password" required minLength={6} value={newPw} onChange={(e) => setNewPw(e.target.value)} />
+                </label>
+                <label>
+                  <span>Confirm new password</span>
+                  <input type="password" required value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} />
+                </label>
+                {error && <div className="error-banner">{error}</div>}
+                <button type="submit" className="cta-button" disabled={saving}>
+                  {saving ? 'Saving…' : 'Update password'}
+                </button>
+              </form>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 /** Clickable daily-quota ring → Claude-style per-model usage panel. */
@@ -639,6 +722,7 @@ export default function Chat() {
               <Settings size={17} />
             </button>
           )}
+          <ChangePasswordButton />
           <button className="icon-button" onClick={logout} title="Sign out" aria-label="Sign out">
             <LogOut size={17} />
           </button>

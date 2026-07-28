@@ -4,18 +4,6 @@ import { ArrowRight, BadgeCheck, LockKeyhole, Mail, ShieldCheck, Sparkles } from
 import { authAPI } from '../api/client'
 import agsLogo from '../assets/ags-logo-hero-dark.png'
 
-const ROLE_LABELS = {
-  manager: 'Manager',
-  lead_analyst: 'Lead Analyst',
-  solar_analyst: 'Analyst',
-}
-
-const DEMO_USERS = [
-  { email: 'test1@ags.com', role: 'manager' },
-  { email: 'test2@ags.com', role: 'lead_analyst' },
-  { email: 'test4@ags.com', role: 'solar_analyst' },
-]
-
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -78,7 +66,7 @@ export default function Login() {
           <div className="auth-card-header">
             <p className="eyebrow">Secure workspace</p>
             <h2>Sign in</h2>
-            <span>Use the demo accounts below for the Vercel walkthrough.</span>
+            <span>Use the account your manager set up for you.</span>
           </div>
 
           <form onSubmit={handleLogin} className="auth-form">
@@ -105,7 +93,7 @@ export default function Login() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="test1234"
+                  placeholder="Enter your password"
                 />
               </div>
             </label>
@@ -117,26 +105,6 @@ export default function Login() {
               <ArrowRight size={17} />
             </button>
           </form>
-
-          <div className="demo-box">
-            <div className="demo-box-header">
-              <span>Demo accounts</span>
-              <small>Password: test1234</small>
-            </div>
-            {DEMO_USERS.map((u) => (
-              <button
-                key={u.email}
-                className="demo-account"
-                onClick={() => {
-                  setEmail(u.email)
-                  setPassword('test1234')
-                }}
-              >
-                <span>{u.email}</span>
-                <strong>{ROLE_LABELS[u.role]}</strong>
-              </button>
-            ))}
-          </div>
         </div>
       </section>
     </main>

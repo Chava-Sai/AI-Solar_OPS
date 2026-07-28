@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, status
-from app.schemas import LoginRequest, TokenResponse
-from app.database import get_user
-from app.auth import verify_password, create_access_token
+from fastapi import APIRouter, Depends, HTTPException, status
+from app.schemas import ChangePasswordRequest, LoginRequest, TokenResponse
+from app.database import get_user, update_password
+from app.auth import verify_password, create_access_token, get_current_user
 from app.usage import record_login
 
 router = APIRouter()
@@ -32,7 +32,21 @@ def login(body: LoginRequest):
     )
 
 @router.get("/me")
-def get_me(current_user: dict = __import__('fastapi').Depends(
-    __import__('app.auth', fromlist=['get_current_user']).get_current_user
-)):
+def get_me(current_user: dict = Depends(get_current_user)):
     return current_user
+
+@router.post("/change-password")
+def change_password(body: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
+    user = get_user(current_user["sub"])
+    if not user or not verify_password(body.current_password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
+        )
+    if len(body.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 6 characters",
+        )
+    update_password(user["email"], body.new_password)
+    return {"message": "Password updated."}

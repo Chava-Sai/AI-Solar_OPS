@@ -89,25 +89,13 @@ confirm it streams an answer with sources.
 
 ---
 
-## Test accounts for the team
+## Accounts for the team
 
-Password for **every** account: **`test1234`**
-
-| Email | Role | Can do |
-|---|---|---|
-| `test1@ags.com` | **Manager** | Chat, upload/delete docs, full history, usage dashboard |
-| `test2@ags.com` | Lead Analyst | Chat, upload docs, full history |
-| `test3@ags.com` | Lead Analyst | Chat, upload docs, full history |
-| `test4@ags.com` | Solar Analyst | Chat, own history |
-| `test5@ags.com` | Solar Analyst | Chat, own history |
-| `test6@ags.com` | Solar Analyst | Chat, own history |
-| `test7@ags.com` | Solar Analyst | Chat, own history |
-| `test8@ags.com` | Solar Analyst | Chat, own history |
-| `test9@ags.com` | Solar Analyst | Chat, own history |
-| `test10@ags.com` | Solar Analyst | Chat, own history |
-
-Accounts and passwords are defined in `backend/app/database.py` — edit that file
-to add/remove people or change the roster before the next deploy.
+One seeded account: **`Arunpandian@amgsol.com`** / `Arun@123` (Manager). Sign in
+with it, then go to **Admin → Team access** to add everyone else — email,
+temporary password, role. No code changes or redeploys needed to add/remove
+people; each person changes their own password after first login (key icon next
+to Sign out).
 
 ---
 
