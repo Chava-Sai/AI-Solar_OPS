@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
@@ -11,7 +12,7 @@ import {
   Clock3,
   Database,
   History,
-  KeyRound,
+  UserCog,
   LogOut,
   MessageSquarePlus,
   PanelLeftClose,
@@ -60,74 +61,213 @@ function activeMemberOf(family, modelPref) {
   return family.members.includes(modelPref) ? modelPref : null
 }
 
-/** Clicking a family: pick its best available member, or cycle to the next
- *  one if a member of this family is already selected. */
-function nextFamilyPick(usage, family, modelPref) {
-  const active = activeMemberOf(family, modelPref)
-  if (active) {
-    const i = family.members.indexOf(active)
-    return family.members[(i + 1) % family.members.length]
+/**
+ * A family's picker button. Single-model families select directly on click;
+ * multi-model families open a small portal-rendered flyout listing each
+ * specific size as its own selectable row (checkmark on the active one) —
+ * explicit choices, not a "click again to cycle" guessing game.
+ */
+function FamilyPickerButton({ fam, usage, modelPref, onPick, variant = 'segment' }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)
+  const btnRef = useRef(null)
+  const active = activeMemberOf(fam, modelPref)
+  const activeModel = active ? usage.models[active] : null
+  const multi = fam.members.length > 1
+
+  function toggle() {
+    if (!multi) {
+      onPick(fam.members[0])
+      return
+    }
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setPos({ bottom: window.innerHeight - r.top + 8, left: Math.max(8, Math.min(r.left, window.innerWidth - 240 - 12)) })
+    }
+    setOpen((v) => !v)
   }
-  return family.members.find((m) => !usage.models[m]?.exhausted) || family.members[0]
+
+  function pick(memberKey) {
+    onPick(memberKey)
+    setOpen(false)
+  }
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        className={variant === 'segment' ? (active ? 'active' : '') : `model-choice ${active ? 'active' : ''}`}
+        disabled={fam.exhausted}
+        title={fam.exhausted ? `${fam.label} daily limit reached` : multi ? `${fam.label} — choose a size` : fam.label}
+        onClick={toggle}
+      >
+        {variant === 'segment' ? (
+          <>
+            {fam.label}
+            {active && <small className="seg-size">{shortLabel(activeModel.label)}</small>}
+            {multi && <ChevronRight size={11} className={`seg-cycle ${open ? 'open' : ''}`} />}
+            <span className="seg-pct">{fam.exhausted ? 'Limit' : `${fam.percentUsed}%`}</span>
+          </>
+        ) : (
+          <>
+            <span>
+              {fam.label}
+              <small>
+                {fam.exhausted
+                  ? 'Daily limit reached'
+                  : activeModel
+                    ? `Using ${shortLabel(activeModel.label)} · ${activeModel.percent_used}% used`
+                    : multi ? `${fam.percentUsed}% used today — choose a size` : `${fam.percentUsed}% used today`}
+              </small>
+            </span>
+            {active ? <Check size={15} /> : multi && <ChevronRight size={14} />}
+          </>
+        )}
+      </button>
+      {open && multi && pos && createPortal(
+        <>
+          <div className="usage-backdrop" onClick={() => setOpen(false)} />
+          <div className="family-flyout" style={{ position: 'fixed', bottom: pos.bottom, left: pos.left }}>
+            {fam.members.map((m) => {
+              const model = usage.models[m]
+              return (
+                <button
+                  key={m}
+                  className={`model-choice ${modelPref === m ? 'active' : ''}`}
+                  disabled={model.exhausted}
+                  onClick={() => pick(m)}
+                >
+                  <span>
+                    {shortLabel(model.label)}
+                    <small>{model.exhausted ? 'Daily limit reached' : `${model.percent_used}% used`}</small>
+                  </span>
+                  {modelPref === m && <Check size={14} />}
+                </button>
+              )
+            })}
+          </div>
+        </>,
+        document.body
+      )}
+    </>
+  )
 }
 
-/** Self-service password change — same backdrop/panel pattern as the usage ring popover. */
-function ChangePasswordButton() {
+/**
+ * Account settings — rename + password change. Rendered through a portal
+ * (not inline in the sidebar) because the sidebar has `overflow: hidden` for
+ * its own internal scroll areas, which was silently clipping this popover
+ * when it lived inside `.sidebar-user`; a fixed-position portal escapes that
+ * entirely and stays anchored to the trigger button regardless.
+ */
+function SettingsButton({ user }) {
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)
+  const btnRef = useRef(null)
+
+  const [name, setName] = useState(user.name || '')
+  const [nameSaving, setNameSaving] = useState(false)
+  const [nameError, setNameError] = useState('')
+  const [nameDone, setNameDone] = useState(false)
+
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
-  const [error, setError] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [done, setDone] = useState(false)
+  const [pwError, setPwError] = useState('')
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwDone, setPwDone] = useState(false)
 
   function toggle() {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setPos({ bottom: window.innerHeight - r.top + 10, left: Math.min(r.left, window.innerWidth - 330 - 12) })
+    }
     setOpen((v) => !v)
+    setName(user.name || '')
+    setNameError('')
+    setNameDone(false)
     setCurrentPw('')
     setNewPw('')
     setConfirmPw('')
-    setError('')
-    setDone(false)
+    setPwError('')
+    setPwDone(false)
   }
 
-  async function submit(e) {
+  async function saveName(e) {
     e.preventDefault()
-    setError('')
-    if (newPw.length < 6) return setError('New password must be at least 6 characters.')
-    if (newPw !== confirmPw) return setError('New passwords do not match.')
-    setSaving(true)
+    setNameError('')
+    if (!name.trim()) return setNameError('Name can\'t be empty.')
+    setNameSaving(true)
+    try {
+      const { data } = await authAPI.updateProfile(name.trim())
+      localStorage.setItem('astra_token', data.access_token)
+      localStorage.setItem('astra_user', JSON.stringify(data.user))
+      setNameDone(true)
+      setTimeout(() => window.location.reload(), 700)
+    } catch (err) {
+      setNameError(err.response?.data?.detail || 'Could not update name.')
+    } finally {
+      setNameSaving(false)
+    }
+  }
+
+  async function savePassword(e) {
+    e.preventDefault()
+    setPwError('')
+    if (newPw.length < 6) return setPwError('New password must be at least 6 characters.')
+    if (newPw !== confirmPw) return setPwError('New passwords do not match.')
+    setPwSaving(true)
     try {
       await authAPI.changePassword(currentPw, newPw)
-      setDone(true)
+      setPwDone(true)
       setCurrentPw('')
       setNewPw('')
       setConfirmPw('')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Could not update password.')
+      setPwError(err.response?.data?.detail || 'Could not update password.')
     } finally {
-      setSaving(false)
+      setPwSaving(false)
     }
   }
 
   return (
-    <div className="usage-anchor">
-      <button className="icon-button" onClick={toggle} title="Change password" aria-label="Change password">
-        <KeyRound size={17} />
+    <>
+      <button ref={btnRef} className="icon-button" onClick={toggle} title="Account settings" aria-label="Account settings">
+        <UserCog size={17} />
       </button>
-      {open && (
+      {open && pos && createPortal(
         <>
           <div className="usage-backdrop" onClick={() => setOpen(false)} />
-          <div className="usage-panel" role="dialog" aria-label="Change password">
+          <div className="usage-panel settings-panel" role="dialog" aria-label="Account settings" style={{ position: 'fixed', bottom: pos.bottom, left: pos.left, top: 'auto', right: 'auto' }}>
             <div className="usage-panel-head">
+              <span>Account settings</span>
+            </div>
+
+            <form className="auth-form" onSubmit={saveName}>
+              <label>
+                <span>Display name</span>
+                <input value={name} onChange={(e) => setName(e.target.value)} />
+              </label>
+              <label>
+                <span>Email</span>
+                <input value={user.email || ''} disabled title="Email is your login and can't be changed here" />
+              </label>
+              {nameError && <div className="error-banner">{nameError}</div>}
+              <button type="submit" className="cta-button" disabled={nameSaving}>
+                {nameDone ? 'Saved ✓' : nameSaving ? 'Saving…' : 'Save name'}
+              </button>
+            </form>
+
+            <div className="usage-panel-head model-head">
               <span>Change password</span>
             </div>
-            {done ? (
+            {pwDone ? (
               <div className="empty-state">
                 <Check size={22} />
                 <strong>Password updated</strong>
               </div>
             ) : (
-              <form className="auth-form" onSubmit={submit}>
+              <form className="auth-form" onSubmit={savePassword}>
                 <label>
                   <span>Current password</span>
                   <input type="password" required value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} />
@@ -140,16 +280,17 @@ function ChangePasswordButton() {
                   <span>Confirm new password</span>
                   <input type="password" required value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} />
                 </label>
-                {error && <div className="error-banner">{error}</div>}
-                <button type="submit" className="cta-button" disabled={saving}>
-                  {saving ? 'Saving…' : 'Update password'}
+                {pwError && <div className="error-banner">{pwError}</div>}
+                <button type="submit" className="cta-button" disabled={pwSaving}>
+                  {pwSaving ? 'Saving…' : 'Update password'}
                 </button>
               </form>
             )}
           </div>
-        </>
+        </>,
+        document.body
       )}
-    </div>
+    </>
   )
 }
 
@@ -227,31 +368,16 @@ function UsageRing({ usage, modelPref, onPickModel }) {
                 </span>
                 {modelPref === null && <Check size={15} />}
               </button>
-              {familyList(usage).map((fam) => {
-                const active = activeMemberOf(fam, modelPref)
-                const activeModel = active ? usage.models[active] : null
-                return (
-                  <button
-                    key={fam.key}
-                    className={`model-choice ${active ? 'active' : ''}`}
-                    disabled={fam.exhausted}
-                    onClick={() => onPickModel(nextFamilyPick(usage, fam, modelPref))}
-                    title={fam.members.length > 1 ? `Click to cycle through ${fam.label} sizes` : undefined}
-                  >
-                    <span>
-                      {fam.label}
-                      <small>
-                        {fam.exhausted
-                          ? 'Daily limit reached'
-                          : activeModel
-                            ? `Using ${shortLabel(activeModel.label)} · ${activeModel.percent_used}% used`
-                            : `${fam.percentUsed}% used today`}
-                      </small>
-                    </span>
-                    {active && <Check size={15} />}
-                  </button>
-                )
-              })}
+              {familyList(usage).map((fam) => (
+                <FamilyPickerButton
+                  key={fam.key}
+                  fam={fam}
+                  usage={usage}
+                  modelPref={modelPref}
+                  onPick={(key) => { onPickModel(key); setOpen(false) }}
+                  variant="list"
+                />
+              ))}
             </div>
           </div>
         </>
@@ -265,20 +391,24 @@ function ConversationRow({
   conversation, isActive, isRenaming, renameValue, favoritesFull,
   onOpen, onToggleFavorite, onStartRename, onRenameChange, onCommitRename, onCancelRename, onDelete,
 }) {
-  const titleWrapRef = useRef(null)
-  const [scrollPx, setScrollPx] = useState(0)
-
   // Long titles are ellipsis-truncated by default (so the favorite/rename/
-  // delete icons never get squeezed out) — hovering slides the text left by
-  // exactly its hidden overflow so the full title becomes readable.
-  function handleTitleEnter() {
-    const el = titleWrapRef.current
-    if (!el) return
-    const overflow = el.scrollWidth - el.clientWidth
-    if (overflow > 0) setScrollPx(overflow)
+  // delete icons never get squeezed out) — hovering pans the text left by
+  // exactly its hidden overflow so the full title becomes readable, then
+  // restores the ellipsis on mouse-leave. (A translateX-on-inline-block
+  // version of this broke native text-overflow:ellipsis — an inline-block
+  // child is an atomic box the browser won't clip mid-text, so it just hard-
+  // cut the button instead of showing "…", and forced the button to its
+  // full content width, pushing the action icons off the sidebar entirely.
+  // Panning scrollLeft on the plain ellipsis span avoids both problems.)
+  function handleTitleEnter(e) {
+    const el = e.currentTarget
+    el.style.textOverflow = 'clip'
+    el.scrollLeft = el.scrollWidth - el.clientWidth
   }
-  function handleTitleLeave() {
-    setScrollPx(0)
+  function handleTitleLeave(e) {
+    const el = e.currentTarget
+    el.scrollLeft = 0
+    el.style.textOverflow = 'ellipsis'
   }
 
   return (
@@ -298,14 +428,11 @@ function ConversationRow({
       ) : (
         <button className="history-item-main" onClick={onOpen}>
           <span
-            className="history-item-title-wrap"
-            ref={titleWrapRef}
+            className="history-item-title"
             onMouseEnter={handleTitleEnter}
             onMouseLeave={handleTitleLeave}
           >
-            <span className="history-item-title" style={{ transform: `translateX(-${scrollPx}px)` }}>
-              {conversation.title}
-            </span>
+            {conversation.title}
           </span>
           <small>{new Date(conversation.updatedAt).toLocaleDateString()}</small>
         </button>
@@ -777,7 +904,7 @@ export default function Chat() {
               <Settings size={17} />
             </button>
           )}
-          <ChangePasswordButton />
+          <SettingsButton user={user} />
           <button className="icon-button" onClick={logout} title="Sign out" aria-label="Sign out">
             <LogOut size={17} />
           </button>
@@ -818,20 +945,22 @@ export default function Chat() {
                     ops review, and reporting.
                   </p>
                 </div>
-                <div className="metric-strip">
-                  <div>
-                    <strong>{kb?.total_documents ?? '—'}</strong>
-                    <span>Documents indexed</span>
+                {canAdmin && (
+                  <div className="metric-strip">
+                    <div>
+                      <strong>{kb?.total_documents ?? '—'}</strong>
+                      <span>Documents indexed</span>
+                    </div>
+                    <div>
+                      <strong>{kb?.total_chunks?.toLocaleString() ?? '—'}</strong>
+                      <span>Knowledge chunks</span>
+                    </div>
+                    <div>
+                      <strong>{kb?.faq?.faq_count ?? '—'}</strong>
+                      <span>Instant FAQ answers</span>
+                    </div>
                   </div>
-                  <div>
-                    <strong>{kb?.total_chunks?.toLocaleString() ?? '—'}</strong>
-                    <span>Knowledge chunks</span>
-                  </div>
-                  <div>
-                    <strong>{kb?.faq?.faq_count ?? '—'}</strong>
-                    <span>Instant FAQ answers</span>
-                  </div>
-                </div>
+                )}
                 <div className="suggestion-grid">
                   {SUGGESTIONS.slice(0, 4).map((s) => (
                     <button key={s.q} className="suggestion-card" onClick={() => send(s.q)}>
@@ -914,31 +1043,16 @@ export default function Chat() {
               >
                 Auto
               </button>
-              {usage && familyList(usage).map((fam) => {
-                const active = activeMemberOf(fam, modelPref)
-                const activeModel = active ? usage.models[active] : null
-                const multi = fam.members.length > 1
-                return (
-                  <button
-                    key={fam.key}
-                    className={active ? 'active' : ''}
-                    disabled={fam.exhausted}
-                    title={
-                      fam.exhausted
-                        ? `${fam.label} daily limit reached`
-                        : multi
-                          ? `${fam.label} — click to cycle sizes (currently ${activeModel ? shortLabel(activeModel.label) : shortLabel(usage.models[fam.members[0]].label)})`
-                          : `${fam.label} — ${fam.percentUsed}% used`
-                    }
-                    onClick={() => setModelPref(nextFamilyPick(usage, fam, modelPref))}
-                  >
-                    {fam.label}
-                    {active && <small className="seg-size">{shortLabel(activeModel.label)}</small>}
-                    {multi && <ChevronRight size={11} className="seg-cycle" />}
-                    <span className="seg-pct">{fam.exhausted ? 'Limit' : `${fam.percentUsed}%`}</span>
-                  </button>
-                )
-              })}
+              {usage && familyList(usage).map((fam) => (
+                <FamilyPickerButton
+                  key={fam.key}
+                  fam={fam}
+                  usage={usage}
+                  modelPref={modelPref}
+                  onPick={setModelPref}
+                  variant="segment"
+                />
+              ))}
             </div>
           </div>
           <div className="composer-shell">

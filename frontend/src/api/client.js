@@ -31,6 +31,7 @@ export const authAPI = {
   login: (email, password) => api.post('/auth/login', { email, password }),
   changePassword: (current_password, new_password) =>
     api.post('/auth/change-password', { current_password, new_password }),
+  updateProfile: (name) => api.put('/auth/profile', { name }),
 }
 
 export const adminAPI = {

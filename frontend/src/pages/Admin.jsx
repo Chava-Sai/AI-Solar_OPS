@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Activity,
   ArrowLeft,
+  Building2,
   CheckCircle2,
   Database,
   File,
@@ -48,6 +49,22 @@ function UsageBar({ percent, exhausted }) {
 }
 
 const CATEGORIES = ['General', 'Case Creation', 'Alerts', 'Aerial', 'Scheduling', 'Ops Review', 'Reports', 'PV Technical', 'BESS', 'Escalation', 'OEM Manual', 'RCA']
+const TECH_LIBRARY = 'Technical Library'
+const OTHER = '__other__'
+
+/** Chunk count as a relative bar (vs. the largest doc in the current view)
+ *  instead of a bare number — easier to spot outliers at a glance. */
+function ChunkBar({ value, max }) {
+  const pct = max > 0 ? Math.max(4, Math.round((value / max) * 100)) : 0
+  return (
+    <div className="chunk-bar-cell" title={`${value.toLocaleString()} chunks`}>
+      <div className="chunk-bar-track">
+        <div className="chunk-bar-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <span>{value.toLocaleString()}</span>
+    </div>
+  )
+}
 
 function fileIcon(filename) {
   const ext = filename.split('.').pop()?.toLowerCase()
@@ -70,8 +87,20 @@ export default function Admin() {
   const [docs, setDocs] = useState([])
   const [stats, setStats] = useState({ total_documents: 0, total_chunks: 0 })
   const [uploads, setUploads] = useState([])
-  const [category, setCategory] = useState('General')
-  const [client, setClient] = useState('All Clients')
+
+  // Upload form: client picked first, category options scope to that client.
+  // "Other" on either reveals a text field to name a brand-new one.
+  const [clientMode, setClientMode] = useState(OTHER)
+  const [selectedClient, setSelectedClient] = useState('')
+  const [newClientName, setNewClientName] = useState('')
+  const [categoryMode, setCategoryMode] = useState(OTHER)
+  const [selectedCategory, setSelectedCategory] = useState('')
+  const [newCategoryName, setNewCategoryName] = useState('')
+
+  // Documents list: filters, default to viewing everything.
+  const [filterClient, setFilterClient] = useState('all')
+  const [filterCategory, setFilterCategory] = useState('all')
+
   const [dragging, setDragging] = useState(false)
   const [loading, setLoading] = useState(false)
   const [view, setView] = useState('docs') // 'docs' | 'usage' | 'team'
@@ -82,6 +111,71 @@ export default function Admin() {
   const [teamError, setTeamError] = useState('')
   const [newUser, setNewUser] = useState({ email: '', name: '', password: '', role: 'user' })
   const [addingUser, setAddingUser] = useState(false)
+
+  // Distinct clients already in the knowledge base, Technical Library always
+  // last (it's a catch-all for technical books, not a real client/plant).
+  const existingClients = useMemo(() => {
+    const set = new Set(docs.map((d) => d.client).filter(Boolean))
+    const hasTechLib = set.delete(TECH_LIBRARY)
+    const arr = [...set].sort()
+    if (hasTechLib) arr.push(TECH_LIBRARY)
+    return arr
+  }, [docs])
+
+  // SOP categories already used for the selected client — falls back to the
+  // full master list for a brand-new client with no documents yet.
+  const categoriesForClient = useMemo(() => {
+    if (!selectedClient || clientMode === OTHER) return CATEGORIES
+    const set = new Set(docs.filter((d) => d.client === selectedClient).map((d) => d.category).filter(Boolean))
+    return set.size ? [...set].sort() : CATEGORIES
+  }, [docs, selectedClient, clientMode])
+
+  const effectiveClient = clientMode === OTHER ? newClientName.trim() : selectedClient
+  const effectiveCategory = categoryMode === OTHER ? newCategoryName.trim() : selectedCategory
+
+  useEffect(() => {
+    if (clientMode !== OTHER) return
+    if (existingClients.length) {
+      setClientMode('existing')
+      setSelectedClient(existingClients[0])
+    }
+  }, [existingClients]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Switching client resets the category pick to that client's first
+  // existing category (or "General" for a brand-new client) — mirrors the
+  // client dropdown's own bootstrap effect above and runs on mount too,
+  // since selectedClient starts empty and this fires once it's first set.
+  useEffect(() => {
+    if (categoriesForClient.length) {
+      setCategoryMode('existing')
+      setSelectedCategory(categoriesForClient[0])
+    }
+  }, [selectedClient]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Documents list: filtered + grouped by client, Technical Library last.
+  const filterCategoryOptions = useMemo(() => {
+    const pool = filterClient === 'all' ? docs : docs.filter((d) => d.client === filterClient)
+    return [...new Set(pool.map((d) => d.category).filter(Boolean))].sort()
+  }, [docs, filterClient])
+
+  const filteredDocs = docs.filter((d) =>
+    (filterClient === 'all' || d.client === filterClient) &&
+    (filterCategory === 'all' || d.category === filterCategory)
+  )
+
+  const groupedByClient = useMemo(() => {
+    const map = new Map()
+    for (const d of filteredDocs) {
+      const key = d.client || 'Unassigned'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push(d)
+    }
+    return [...map.entries()].sort(([a], [b]) => {
+      if (a === TECH_LIBRARY) return 1
+      if (b === TECH_LIBRARY) return -1
+      return a.localeCompare(b)
+    })
+  }, [filteredDocs])
 
   useEffect(() => {
     loadDocs()
@@ -168,6 +262,8 @@ export default function Admin() {
   }
 
   function handleFiles(files) {
+    if (!effectiveClient) return alert('Enter a client name first.')
+    if (!effectiveCategory) return alert('Enter a SOP category first.')
     const allowed = ['.pdf', '.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt', '.txt']
     const valid = files.filter((f) => allowed.some((ext) => f.name.toLowerCase().endsWith(ext)))
     if (!valid.length) return alert('No supported files selected.')
@@ -175,11 +271,11 @@ export default function Admin() {
   }
 
   async function uploadFile(file) {
-    const entry = { name: file.name, category, client, status: 'ingesting', message: 'Uploading file...' }
+    const entry = { name: file.name, category: effectiveCategory, client: effectiveClient, status: 'ingesting', message: 'Uploading file...' }
     setUploads((p) => [entry, ...p])
 
     try {
-      const { data } = await docsAPI.upload(file, category, client)
+      const { data } = await docsAPI.upload(file, effectiveCategory, effectiveClient)
       setUploads((p) => p.map((u) => (u.name === file.name ? { ...u, message: 'Creating vector chunks...' } : u)))
       pollStatus(data.job_id, file.name)
     } catch (err) {
@@ -574,15 +670,61 @@ export default function Admin() {
 
             <div className="form-grid">
               <label>
-                <span>SOP category</span>
-                <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                  {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+                <span>Client</span>
+                <select
+                  value={clientMode === OTHER ? OTHER : selectedClient}
+                  onChange={(e) => {
+                    if (e.target.value === OTHER) {
+                      setClientMode(OTHER)
+                      setNewClientName('')
+                    } else {
+                      setClientMode('existing')
+                      setSelectedClient(e.target.value)
+                    }
+                  }}
+                >
+                  {existingClients.map((c) => <option key={c} value={c}>{c}</option>)}
+                  <option value={OTHER}>Other (new client)…</option>
                 </select>
               </label>
+              {clientMode === OTHER && (
+                <label>
+                  <span>New client name</span>
+                  <input
+                    value={newClientName}
+                    onChange={(e) => setNewClientName(e.target.value)}
+                    placeholder="e.g. Riverside Solar Farm"
+                  />
+                </label>
+              )}
               <label>
-                <span>Client / plant</span>
-                <input value={client} onChange={(e) => setClient(e.target.value)} placeholder="All Clients" />
+                <span>SOP category</span>
+                <select
+                  value={categoryMode === OTHER ? OTHER : selectedCategory}
+                  onChange={(e) => {
+                    if (e.target.value === OTHER) {
+                      setCategoryMode(OTHER)
+                      setNewCategoryName('')
+                    } else {
+                      setCategoryMode('existing')
+                      setSelectedCategory(e.target.value)
+                    }
+                  }}
+                >
+                  {categoriesForClient.map((c) => <option key={c} value={c}>{c}</option>)}
+                  <option value={OTHER}>Other (new category)…</option>
+                </select>
               </label>
+              {categoryMode === OTHER && (
+                <label>
+                  <span>New category name</span>
+                  <input
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="e.g. Warranty Claims"
+                  />
+                </label>
+              )}
             </div>
 
             <div
@@ -663,6 +805,19 @@ export default function Admin() {
               <h2>Documents in knowledge base</h2>
               <p>{stats.total_documents} documents · {stats.total_chunks} chunks indexed</p>
             </div>
+            <div className="doc-filters">
+              <select
+                value={filterClient}
+                onChange={(e) => { setFilterClient(e.target.value); setFilterCategory('all') }}
+              >
+                <option value="all">All clients</option>
+                {existingClients.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+                <option value="all">All categories</option>
+                {filterCategoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
           </div>
 
           {docs.length === 0 ? (
@@ -671,34 +826,50 @@ export default function Admin() {
               <strong>No documents ingested yet</strong>
               <span>Upload SOP files above to build the assistant knowledge base.</span>
             </div>
-          ) : (
-            <div className="doc-table">
-              <div className="doc-table-head">
-                <span>Document</span>
-                <span>Category</span>
-                <span>Client</span>
-                <span>Chunks</span>
-                <span />
-              </div>
-              {docs.map((d, i) => (
-                <div key={`${d.filename}-${i}`} className="doc-row">
-                  <span className="doc-name">
-                    <span className="file-glyph">{fileIcon(d.filename)}</span>
-                    {d.filename}
-                  </span>
-                  <span className="tag">{d.category}</span>
-                  <span>{d.client}</span>
-                  <strong>{d.total_chunks}</strong>
-                  {user.role === 'admin' ? (
-                    <button className="danger-icon" onClick={() => handleDelete(d.filename)} title="Delete document" aria-label={`Delete ${d.filename}`}>
-                      <Trash2 size={16} />
-                    </button>
-                  ) : (
-                    <span />
-                  )}
-                </div>
-              ))}
+          ) : filteredDocs.length === 0 ? (
+            <div className="empty-state">
+              <Database size={30} />
+              <strong>No documents match this filter</strong>
+              <span>Try "All clients" / "All categories" instead.</span>
             </div>
+          ) : (
+            groupedByClient.map(([clientName, clientDocs]) => {
+              const maxChunks = Math.max(...clientDocs.map((d) => d.total_chunks || 0), 1)
+              return (
+                <div key={clientName} className="client-group">
+                  <div className="client-group-head">
+                    {clientName === TECH_LIBRARY ? <FolderUp size={15} /> : <Building2 size={15} />}
+                    <strong>{clientName}</strong>
+                    <span>{clientDocs.length} document{clientDocs.length === 1 ? '' : 's'}</span>
+                  </div>
+                  <div className="doc-table client-docs-table">
+                    <div className="doc-table-head">
+                      <span>Document</span>
+                      <span>Category</span>
+                      <span>Chunks</span>
+                      <span />
+                    </div>
+                    {clientDocs.map((d, i) => (
+                      <div key={`${d.filename}-${i}`} className="doc-row">
+                        <span className="doc-name">
+                          <span className="file-glyph">{fileIcon(d.filename)}</span>
+                          {d.filename}
+                        </span>
+                        <span className="tag">{d.category}</span>
+                        <ChunkBar value={d.total_chunks || 0} max={maxChunks} />
+                        {user.role === 'admin' ? (
+                          <button className="danger-icon" onClick={() => handleDelete(d.filename)} title="Delete document" aria-label={`Delete ${d.filename}`}>
+                            <Trash2 size={16} />
+                          </button>
+                        ) : (
+                          <span />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })
           )}
         </section>
         )}

@@ -116,6 +116,20 @@ def update_password(email: str, new_password: str):
         _save(_data)
 
 
+def update_name(email: str, new_name: str) -> dict:
+    key = email.strip().lower()
+    new_name = new_name.strip()
+    if not new_name:
+        raise ValueError("Name can't be empty.")
+    with _lock:
+        if key not in _data["users"]:
+            raise ValueError("User not found.")
+        _data["users"][key]["name"] = new_name
+        _save(_data)
+        u = _data["users"][key]
+        return {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"]}
+
+
 # ── In-memory chat history (team-wide History tab) ─────
 CHAT_HISTORY: list = []
 _chat_id_counter = 1

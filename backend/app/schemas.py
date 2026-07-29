@@ -16,6 +16,9 @@ class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
 
+class UpdateNameRequest(BaseModel):
+    name: str
+
 # ── Admin: user management ─────────────────────────────
 class CreateUserRequest(BaseModel):
     email: str

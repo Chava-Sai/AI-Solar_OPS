@@ -251,7 +251,7 @@ def record_llm_call(email: str, model_key: str, prompt_text: str, completion_tex
         mu = u["models"].setdefault(model_key, _empty_model())
         mu["tokens"] += tokens
         mu["requests"] += 1
-        u["last_active"] = datetime.now().isoformat()
+        u["last_active"] = datetime.utcnow().isoformat() + "Z"
         _save(data)
         lim = MODELS.get(model_key, {})
         logger.info(f"[Usage] {email} [{model_key}]: +{tokens} tok → "
@@ -266,7 +266,7 @@ def record_faq_hit(email: str) -> dict:
         data = _load()
         u = _user(data, email)
         u["faq_hits"] += 1
-        u["last_active"] = datetime.now().isoformat()
+        u["last_active"] = datetime.utcnow().isoformat() + "Z"
         _save(data)
     return get_usage(email)
 
@@ -276,7 +276,7 @@ def record_login(email: str):
         data = _load()
         u = _user(data, email)
         u["logins"] += 1
-        u["last_active"] = datetime.now().isoformat()
+        u["last_active"] = datetime.utcnow().isoformat() + "Z"
         _save(data)
 
 
