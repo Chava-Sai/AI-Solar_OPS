@@ -11,6 +11,7 @@ import {
   FileText,
   FolderUp,
   Loader2,
+  Menu,
   RefreshCw,
   Shield,
   Trash2,
@@ -83,6 +84,9 @@ export default function Admin() {
   const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('astra_user') || '{}')
   const fileRef = useRef()
+  const [railOpen, setRailOpen] = useState(() => (
+    typeof window === 'undefined' ? true : !window.matchMedia('(max-width: 980px)').matches
+  ))
 
   const [docs, setDocs] = useState([])
   const [stats, setStats] = useState({ total_documents: 0, total_chunks: 0 })
@@ -182,6 +186,19 @@ export default function Admin() {
   }, [])
 
   useEffect(() => {
+    const mq = window.matchMedia('(max-width: 980px)')
+    const syncRailToViewport = () => setRailOpen(!mq.matches)
+
+    syncRailToViewport()
+    if (mq.addEventListener) {
+      mq.addEventListener('change', syncRailToViewport)
+      return () => mq.removeEventListener('change', syncRailToViewport)
+    }
+    mq.addListener(syncRailToViewport)
+    return () => mq.removeListener(syncRailToViewport)
+  }, [])
+
+  useEffect(() => {
     if (view !== 'usage') return
     loadTeamUsage()
     const t = setInterval(loadTeamUsage, 30000) // live refresh every 30s
@@ -255,6 +272,13 @@ export default function Admin() {
     }
   }
 
+  function selectView(nextView) {
+    setView(nextView)
+    if (window.matchMedia('(max-width: 980px)').matches) {
+      setRailOpen(false)
+    }
+  }
+
   function onDrop(e) {
     e.preventDefault()
     setDragging(false)
@@ -318,23 +342,37 @@ export default function Admin() {
   }
 
   return (
-    <div className="admin-layout">
+    <div className={`admin-layout sales-hub-shell ${railOpen ? '' : 'sidebar-collapsed'}`}>
+      <div className="suite-topbar">
+        <div className="suite-left">
+          <button className="suite-round" onClick={() => setRailOpen((v) => !v)} aria-label="Toggle navigation">
+            <Menu size={19} />
+          </button>
+        </div>
+        <div className="suite-title">
+          <strong>AGS</strong>
+          <span>Astra</span>
+        </div>
+        <div className="suite-right" />
+      </div>
+
+      {railOpen && <div className="sidebar-mobile-backdrop" onClick={() => setRailOpen(false)} />}
       <aside className="admin-rail">
         <div className="brand-lockup">
           <img className="brand-logo" src={agsLogo} alt="American Green Solutions" />
           <p className="brand-sub">Admin console</p>
         </div>
 
-        <button className={`rail-link ${view === 'docs' ? 'active' : ''}`} onClick={() => setView('docs')}>
+        <button className={`rail-link ${view === 'docs' ? 'active' : ''}`} onClick={() => selectView('docs')}>
           <Database size={17} />
           Knowledge base
         </button>
-        <button className={`rail-link ${view === 'usage' ? 'active' : ''}`} onClick={() => setView('usage')}>
+        <button className={`rail-link ${view === 'usage' ? 'active' : ''}`} onClick={() => selectView('usage')}>
           <Activity size={17} />
           Usage dashboard
         </button>
         {user.role === 'admin' && (
-          <button className={`rail-link ${view === 'team' ? 'active' : ''}`} onClick={() => setView('team')}>
+          <button className={`rail-link ${view === 'team' ? 'active' : ''}`} onClick={() => selectView('team')}>
             <UserPlus size={17} />
             Team access
           </button>
@@ -367,6 +405,9 @@ export default function Admin() {
       <main className="admin-main">
         <header className="admin-header">
           <div>
+            <button className="ghost-icon admin-menu-button" onClick={() => setRailOpen(true)} aria-label="Open admin navigation">
+              <Menu size={18} />
+            </button>
             <p className="eyebrow">
               {view === 'docs' ? 'Document operations' : view === 'usage' ? 'Model consumption' : 'Access control'}
             </p>
