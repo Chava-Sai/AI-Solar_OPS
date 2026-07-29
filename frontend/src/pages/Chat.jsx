@@ -468,18 +468,6 @@ const ROLE_LABELS = {
   user: 'User',
 }
 
-const CATEGORIES = [
-  'All SOPs',
-  'Case Creation',
-  'Alerts',
-  'Aerial',
-  'Scheduling',
-  'Ops Review',
-  'Reports',
-  'PV Technical',
-  'BESS',
-]
-
 const SUGGESTIONS = [
   {
     q: 'How do I create a reactive case in Softwrench?',
@@ -542,6 +530,8 @@ export default function Chat() {
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [category, setCategory] = useState('All SOPs')
+  const [clientFilter, setClientFilter] = useState(null)
+  const [expandedClient, setExpandedClient] = useState(null)
   const [sideTab, setSideTab] = useState('categories')
   const [conversations, setConversations] = useState([])
   const [activeConversationId, setActiveConversationId] = useState(null)
@@ -558,6 +548,26 @@ export default function Chat() {
     if (key) localStorage.setItem('astra_model_pref', key)
     else localStorage.removeItem('astra_model_pref')
   }
+
+  // Knowledge scope, client-first: real client names (from ingested docs),
+  // each expandable to its own categories. Technical Library sorts last —
+  // it's a catch-all for technical books, not a real client/plant.
+  const knowledgeClients = useMemo(() => {
+    const docs = kb?.documents || []
+    const map = new Map()
+    for (const d of docs) {
+      if (!d.client) continue
+      if (!map.has(d.client)) map.set(d.client, new Set())
+      map.get(d.client).add(d.category)
+    }
+    const entries = [...map.entries()].map(([name, cats]) => ({ name, categories: [...cats].sort() }))
+    entries.sort((a, b) => {
+      if (a.name === 'Technical Library') return 1
+      if (b.name === 'Technical Library') return -1
+      return a.name.localeCompare(b.name)
+    })
+    return entries
+  }, [kb])
 
   const bottomRef = useRef(null)
   const taRef = useRef(null)
@@ -656,7 +666,7 @@ export default function Chat() {
     setStreaming(true)
 
     ctrlRef.current = streamChat(
-      { query, category_filter: category === 'All SOPs' ? null : category, model: modelPref },
+      { query, category_filter: category === 'All SOPs' ? null : category, client_filter: clientFilter, model: modelPref },
       {
         onSources: () => {},
         onToken: (t) => updateLast((m) => ({ text: m.text + t })),
@@ -809,11 +819,37 @@ export default function Chat() {
             <>
               <p className="section-kicker">Knowledge scope</p>
               <div className="filter-stack">
-                {CATEGORIES.map((c) => (
-                  <button key={c} className={`filter-item ${category === c ? 'active' : ''}`} onClick={() => setCategory(c)}>
-                    <span>{c}</span>
-                    {category === c && <ChevronRight size={15} />}
-                  </button>
+                <button
+                  className={`filter-item ${category === 'All SOPs' ? 'active' : ''}`}
+                  onClick={() => { setCategory('All SOPs'); setClientFilter(null) }}
+                >
+                  <span>All SOPs</span>
+                  {category === 'All SOPs' && <ChevronRight size={15} />}
+                </button>
+                {knowledgeClients.map((c) => (
+                  <div key={c.name} className="client-scope-group">
+                    <button
+                      className={`filter-item client-item ${expandedClient === c.name ? 'expanded' : ''}`}
+                      onClick={() => setExpandedClient((v) => (v === c.name ? null : c.name))}
+                    >
+                      <span>{c.name}</span>
+                      <ChevronRight size={15} className="client-chevron" />
+                    </button>
+                    {expandedClient === c.name && (
+                      <div className="client-scope-categories">
+                        {c.categories.map((cat) => (
+                          <button
+                            key={cat}
+                            className={`filter-item sub-item ${category === cat && clientFilter === c.name ? 'active' : ''}`}
+                            onClick={() => { setCategory(cat); setClientFilter(c.name) }}
+                          >
+                            <span>{cat}</span>
+                            {category === cat && clientFilter === c.name && <ChevronRight size={14} />}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
 
