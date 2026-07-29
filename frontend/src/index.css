@@ -3395,7 +3395,14 @@ button:disabled {
 }
 
 @media (max-width: 980px) {
-  .sales-hub-shell {
+  /* .sales-hub-shell.sidebar-collapsed sets its own grid-template-columns
+     (0 minmax(0,1fr)) with equal specificity to plain .sales-hub-shell
+     below — without repeating the .sidebar-collapsed compound here too,
+     that desktop-collapse rule wins on mobile and leaves .workspace
+     parked in a 0px-wide column. The sidebar is a fixed-position overlay
+     on mobile in both states, so the grid is always single-column here. */
+  .sales-hub-shell,
+  .sales-hub-shell.sidebar-collapsed {
     display: grid;
     grid-template-columns: 1fr;
     grid-template-rows: 54px minmax(0, 1fr);
@@ -3481,7 +3488,15 @@ button:disabled {
 }
 
 @media (max-width: 680px) {
+  /* Needs the .sidebar-collapsed compound too, matching its specificity —
+     see the note in the 980px block above; without it the collapsed
+     (default-closed-on-mobile) state keeps overflow:hidden from there and
+     blocks all user-driven scroll (JS-driven scrollIntoView still moves
+     scrollTop, which is what made this look "half-working" — the page
+     jumps to a scrolled position on load/send but nothing responds to a
+     swipe afterwards). */
   .sales-hub-shell,
+  .sales-hub-shell.sidebar-collapsed,
   .sales-hub-shell .workspace {
     height: auto;
     min-height: 100svh;
@@ -3660,5 +3675,207 @@ button:disabled {
   .sales-hub-shell .composer-zone p {
     font-size: 10.5px;
     line-height: 1.3;
+  }
+}
+
+@media (max-width: 680px) {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  .sales-hub-shell,
+  .sales-hub-shell.sidebar-collapsed {
+    width: 100%;
+    max-width: 100vw;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: 52px minmax(0, 1fr) !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    max-height: 100dvh;
+    overflow: hidden !important;
+  }
+
+  .sales-hub-shell .workspace {
+    grid-column: 1;
+    width: 100%;
+    max-width: 100vw;
+    min-width: 0;
+    height: 100%;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .sales-hub-shell .topbar {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    min-height: auto;
+    gap: 8px;
+    padding: 14px 12px 12px;
+    text-align: center;
+  }
+
+  .sales-hub-shell .topbar-left {
+    width: 100%;
+    flex: none;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .sales-hub-shell .topbar-left > div {
+    justify-items: center;
+  }
+
+  .sales-hub-shell .topbar h1 {
+    font-size: 26px;
+  }
+
+  .sales-hub-shell .topbar .eyebrow {
+    font-size: 12px;
+  }
+
+  .sales-hub-shell .topbar-actions {
+    width: 100%;
+    margin: 0;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .sales-hub-shell .status-pill,
+  .sales-hub-shell .usage-ring {
+    min-height: 34px;
+  }
+
+  .sales-hub-shell .usage-backdrop {
+    z-index: 120;
+    background: rgba(15, 23, 42, 0.18);
+  }
+
+  .sales-hub-shell .usage-panel {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: 92px;
+    bottom: auto;
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - 116px);
+    overflow-y: auto;
+    z-index: 121;
+    padding: 14px;
+    border-radius: 8px;
+  }
+
+  .sales-hub-shell .usage-panel-head {
+    align-items: flex-start;
+  }
+
+  .sales-hub-shell .usage-panel-head span {
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .sales-hub-shell .family-flyout {
+    position: fixed !important;
+    left: 12px !important;
+    right: 12px;
+    bottom: 18px !important;
+    width: auto;
+    max-height: 42dvh;
+    overflow-y: auto;
+    z-index: 122;
+  }
+
+  .sales-hub-shell .chat-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    max-width: 100vw;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    display: block;
+    padding: 12px 10px 0;
+  }
+
+  .sales-hub-shell .chat-column {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: auto;
+    gap: 12px;
+    padding: 0 0 18px;
+    align-content: stretch;
+  }
+
+  .sales-hub-shell .welcome-panel {
+    width: 100%;
+    max-width: 100%;
+    justify-self: stretch;
+    justify-items: center;
+    box-sizing: border-box;
+    padding: 16px 14px;
+    gap: 14px;
+  }
+
+  .sales-hub-shell .welcome-copy {
+    width: 100%;
+    max-width: 100%;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .sales-hub-shell .hero-badge {
+    max-width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .sales-hub-shell .welcome-copy h2 {
+    max-width: 100%;
+    font-size: 24px;
+    line-height: 1.15;
+  }
+
+  .sales-hub-shell .welcome-copy p {
+    max-width: 330px;
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+
+  .sales-hub-shell .metric-strip,
+  .sales-hub-shell .suggestion-grid {
+    width: 100%;
+    max-width: 100%;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .sales-hub-shell .metric-strip div,
+  .sales-hub-shell .suggestion-card {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .sales-hub-shell .suggestion-card {
+    min-height: 92px;
+    padding: 13px 14px;
+  }
+
+  .sales-hub-shell .suggestion-card strong {
+    font-size: 15px;
+    line-height: 1.35;
   }
 }
