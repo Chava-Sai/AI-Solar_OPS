@@ -538,7 +538,12 @@ export default function Chat() {
   const [renamingId, setRenamingId] = useState(null)
   const [renameValue, setRenameValue] = useState('')
   const [copied, setCopied] = useState(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  // On narrow screens the sidebar becomes an overlay drawer (see the 980px
+  // breakpoint in index.css) — default it closed there so it doesn't cover
+  // the chat on first load, same as it's always been on desktop (open).
+  const [sidebarOpen, setSidebarOpen] = useState(() => (
+    typeof window === 'undefined' || window.innerWidth > 980
+  ))
   const [usage, setUsage] = useState(null)
   const [kb, setKb] = useState(null)
   const [modelPref, setModelPrefState] = useState(() => localStorage.getItem('astra_model_pref') || null)
@@ -792,6 +797,9 @@ export default function Chat() {
 
   return (
     <div className={`app-shell ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
+      {sidebarOpen && (
+        <div className="sidebar-mobile-backdrop" onClick={() => setSidebarOpen(false)} />
+      )}
       <aside className="sidebar">
         <div className="brand-lockup">
           <img className="brand-logo" src={agsLogo} alt="American Green Solutions" />
@@ -950,7 +958,7 @@ export default function Chat() {
       <main className="workspace">
         <header className="topbar">
           <div className="topbar-left">
-            <button className="ghost-icon desktop-only" onClick={() => setSidebarOpen((v) => !v)} aria-label="Toggle sidebar">
+            <button className="ghost-icon" onClick={() => setSidebarOpen((v) => !v)} aria-label="Toggle sidebar">
               <PanelLeftClose size={18} />
             </button>
             <div>
