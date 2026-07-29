@@ -15,6 +15,7 @@ import {
   UserCog,
   LogOut,
   MessageSquarePlus,
+  Menu,
   PanelLeftClose,
   Pencil,
   Search,
@@ -614,7 +615,7 @@ export default function Chat() {
 
   useEffect(() => {
     if (messages.length > 0) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }
   }, [messages, streaming])
 
@@ -810,7 +811,20 @@ export default function Chat() {
   const recentConversations = conversations.filter((c) => !c.favorite).sort(byRecentActivity)
 
   return (
-    <div className={`app-shell ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
+    <div className={`app-shell sales-hub-shell ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
+      <div className="suite-topbar">
+        <div className="suite-left">
+          <button className="suite-round" onClick={() => setSidebarOpen((v) => !v)} aria-label="Toggle navigation">
+            <Menu size={19} />
+          </button>
+        </div>
+        <div className="suite-title">
+          <strong>AGS</strong>
+          <span>Astra</span>
+        </div>
+        <div className="suite-right" />
+      </div>
+
       {sidebarOpen && (
         <div className="sidebar-mobile-backdrop" onClick={() => setSidebarOpen(false)} />
       )}
@@ -976,8 +990,8 @@ export default function Chat() {
               <PanelLeftClose size={18} />
             </button>
             <div>
-              <p className="eyebrow">Solar operations assistant</p>
-              <h1>SolarOps Assistant</h1>
+              <h1>AGS Solar Ops</h1>
+              <p className="eyebrow">Smarter operations intelligence</p>
             </div>
           </div>
           <div className="topbar-actions">
@@ -1080,7 +1094,9 @@ export default function Chat() {
                 )}
               </div>
             ))}
-            <div ref={bottomRef} />
+            {messages.length > 0 && (
+              <div className="chat-bottom-spacer" ref={bottomRef} aria-hidden="true" />
+            )}
           </div>
         </div>
 
