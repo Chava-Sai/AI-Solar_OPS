@@ -600,6 +600,19 @@ export default function Chat() {
   }, [])
 
   useEffect(() => {
+    const mq = window.matchMedia('(max-width: 980px)')
+    const syncSidebarToViewport = () => setSidebarOpen(!mq.matches)
+
+    syncSidebarToViewport()
+    if (mq.addEventListener) {
+      mq.addEventListener('change', syncSidebarToViewport)
+      return () => mq.removeEventListener('change', syncSidebarToViewport)
+    }
+    mq.addListener(syncSidebarToViewport)
+    return () => mq.removeListener(syncSidebarToViewport)
+  }, [])
+
+  useEffect(() => {
     if (messages.length > 0) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
@@ -713,6 +726,7 @@ export default function Chat() {
     setMessages([])
     setActiveConversationId(null)
     chatScrollRef.current?.scrollTo({ top: 0 })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   function openConversation(conversation) {
@@ -720,7 +734,7 @@ export default function Chat() {
     setActiveConversationId(conversation.id)
     setMessages(conversation.messages || [])
     requestAnimationFrame(() => {
-      chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight })
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     })
   }
 
