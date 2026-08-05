@@ -3927,6 +3927,8 @@ button:disabled {
 }
 
 .sales-hub-shell .composer-model-row {
+  width: min(920px, 100%);
+  max-width: 920px;
   justify-content: flex-start;
 }
 
