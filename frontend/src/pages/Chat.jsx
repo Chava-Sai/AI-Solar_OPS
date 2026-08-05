@@ -893,7 +893,7 @@ export default function Chat() {
               <Settings size={17} />
             </button>
           )}
-          <button className="icon-button" onClick={() => navigate('/settings')} title="Account settings" aria-label="Account settings">
+          <button className="icon-button" onClick={() => navigate('/settings')} title="Change password" aria-label="Change password">
             <UserCog size={17} />
           </button>
           <button className="icon-button" onClick={logout} title="Sign out" aria-label="Sign out">

@@ -10,8 +10,11 @@ import {
   FileSpreadsheet,
   FileText,
   FolderUp,
+  KeyRound,
   Loader2,
+  LogOut,
   Menu,
+  MessageSquareText,
   RefreshCw,
   Shield,
   Trash2,
@@ -84,7 +87,7 @@ function statusIcon(status) {
 
 export default function Admin() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const fileRef = useRef()
   const [railOpen, setRailOpen] = useState(() => (
     typeof window === 'undefined' ? true : !window.matchMedia('(max-width: 980px)').matches
@@ -347,8 +350,9 @@ export default function Admin() {
     <div className={`admin-layout sales-hub-shell ${railOpen ? '' : 'sidebar-collapsed'}`}>
       <div className="suite-topbar">
         <div className="suite-left">
-          <button className="suite-round" onClick={() => setRailOpen((v) => !v)} aria-label="Toggle navigation">
-            <Menu size={19} />
+          <button className="suite-back-link" onClick={() => navigate('/')}>
+            <ArrowLeft size={17} />
+            Back to chat
           </button>
         </div>
         <div className="suite-title">
@@ -382,11 +386,6 @@ export default function Admin() {
             Team access
           </button>
         )}
-        <button className="rail-link" onClick={() => navigate('/')}>
-          <ArrowLeft size={17} />
-          Back to chat
-        </button>
-
         <div className="rail-stats">
           <div>
             <strong>{stats.total_documents}</strong>
@@ -400,9 +399,20 @@ export default function Admin() {
 
         <div className="rail-user">
           <div className="avatar">{user.name?.[0]?.toUpperCase() || 'A'}</div>
-          <div>
+          <div className="rail-user-copy">
             <strong>{user.name || 'Astra User'}</strong>
             <span>{user.role === 'admin' ? 'Admin' : 'User'}</span>
+          </div>
+          <div className="rail-user-actions">
+            <button className="icon-button" onClick={() => navigate('/')} title="Chat" aria-label="Go to chat">
+              <MessageSquareText size={17} />
+            </button>
+            <button className="icon-button" onClick={() => navigate('/settings')} title="Change password" aria-label="Change password">
+              <KeyRound size={17} />
+            </button>
+            <button className="icon-button" onClick={logout} title="Logout" aria-label="Logout">
+              <LogOut size={17} />
+            </button>
           </div>
         </div>
       </aside>
@@ -426,10 +436,6 @@ export default function Admin() {
             </span>
           </div>
           <div className="admin-header-actions">
-            <button className="subtle-button" onClick={() => navigate('/')}>
-              <ArrowLeft size={15} />
-              Back to chat
-            </button>
             <button
               className="subtle-button"
               onClick={view === 'docs' ? loadDocs : view === 'usage' ? loadTeamUsage : loadTeamUsers}
