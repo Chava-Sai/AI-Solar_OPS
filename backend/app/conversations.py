@@ -1,8 +1,11 @@
 """
-Server-side chat conversation storage — per-user, JSON-file-backed (same
-pattern as usage.py / database.py). Replaces the old browser-localStorage
-approach so a user's Recent/Favorites list is identical no matter which
-browser or device they're signed in from.
+Server-side chat conversation storage — per-user. Two backends behind the
+same two functions:
+  - DATABASE_URL set    -> Postgres (Cloud SQL in production).
+  - DATABASE_URL unset  -> JSON file, same as before.
+
+Replaces the old browser-localStorage approach so a user's Recent/Favorites
+list is identical no matter which browser or device they're signed in from.
 
 The client still computes the full trimmed list (recent-10 FIFO, favorites-5
 cap, rename/favorite toggling) exactly as it did with localStorage — this
@@ -15,6 +18,8 @@ import json
 import logging
 import threading
 from pathlib import Path
+
+from app import db as dbmod
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +47,39 @@ def _save(data: dict):
 
 _data = _load()
 
+if dbmod.is_enabled():
+    dbmod.init_db()
+
 
 def list_conversations(email: str) -> list:
-    return _data.get(email.strip().lower(), [])
+    key = email.strip().lower()
+    if dbmod.is_enabled():
+        session = dbmod.get_session()
+        try:
+            bucket = session.get(dbmod.ConversationBucket, key)
+            return bucket.conversations if bucket else []
+        finally:
+            session.close()
+    return _data.get(key, [])
 
 
 def save_conversations(email: str, conversations: list):
     key = email.strip().lower()
+
+    if dbmod.is_enabled():
+        session = dbmod.get_session()
+        try:
+            bucket = session.get(dbmod.ConversationBucket, key)
+            if bucket is None:
+                bucket = dbmod.ConversationBucket(user_email=key, conversations=conversations)
+                session.add(bucket)
+            else:
+                bucket.conversations = conversations
+            session.commit()
+        finally:
+            session.close()
+        return
+
     with _lock:
         _data[key] = conversations
         _save(_data)

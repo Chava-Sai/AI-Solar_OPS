@@ -23,9 +23,14 @@ import threading
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from app import db as dbmod
+
 logger = logging.getLogger(__name__)
 
 USAGE_FILE = Path(os.getenv("USAGE_DATA_PATH", "./usage_data.json"))
+
+if dbmod.is_enabled():
+    dbmod.init_db()
 
 # Model registry: key → Groq model id, label, per-user + global daily limits.
 # Order = spend priority (best quality first; users burn budgets sequentially).
@@ -97,6 +102,17 @@ def _empty_user() -> dict:
 
 def _load() -> dict:
     today = date.today().isoformat()
+
+    if dbmod.is_enabled():
+        session = dbmod.get_session()
+        try:
+            rows = session.query(dbmod.UsageDaily).filter(
+                dbmod.UsageDaily.usage_date == date.today()
+            ).all()
+            return {"date": today, "users": {r.user_email: r.data for r in rows}}
+        finally:
+            session.close()
+
     if USAGE_FILE.exists():
         try:
             data = json.loads(USAGE_FILE.read_text())
@@ -108,6 +124,24 @@ def _load() -> dict:
 
 
 def _save(data: dict):
+    if dbmod.is_enabled():
+        session = dbmod.get_session()
+        try:
+            usage_date = date.fromisoformat(data["date"])
+            for email, u in data["users"].items():
+                row = session.get(dbmod.UsageDaily, (email, usage_date))
+                if row is None:
+                    session.add(dbmod.UsageDaily(user_email=email, usage_date=usage_date, data=u))
+                else:
+                    row.data = u
+            session.commit()
+        except Exception as e:
+            logger.error(f"[Usage] Failed to persist usage data: {e}")
+            session.rollback()
+        finally:
+            session.close()
+        return
+
     try:
         USAGE_FILE.write_text(json.dumps(data))
     except Exception as e:
