@@ -1,28 +1,17 @@
 import axios from 'axios'
 
-// In dev, Vite proxies '/api' to localhost:8000 (see vite.config.js).
-// In production (Vercel), set VITE_API_URL to the deployed backend's base
-// URL (e.g. https://astra-ai-backend.onrender.com) — no trailing slash.
-const API_BASE = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api`
-  : '/api'
-
-const api = axios.create({ baseURL: API_BASE })
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('astra_token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
+// /api is always same-origin: Vite proxies it to localhost:8000 in dev (see
+// vite.config.js), and Vercel proxies it to the Cloud Run backend in
+// production (see vercel.json rewrites). The session lives in an httpOnly
+// cookie the browser attaches automatically on same-origin requests — no
+// token is ever stored in JS-reachable memory or localStorage.
+const api = axios.create({ baseURL: '/api', withCredentials: true })
 
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    const isLoginRequest = err.config?.url?.includes('/auth/login')
-    const hadSession = Boolean(localStorage.getItem('astra_token'))
-    if (err.response?.status === 401 && hadSession && !isLoginRequest) {
-      localStorage.removeItem('astra_token')
-      localStorage.removeItem('astra_user')
+    const isAuthRequest = err.config?.url?.includes('/auth/login') || err.config?.url?.includes('/auth/me')
+    if (err.response?.status === 401 && !isAuthRequest) {
       window.location.href = '/login'
     }
     return Promise.reject(err)
@@ -31,6 +20,8 @@ api.interceptors.response.use(
 
 export const authAPI = {
   login: (email, password) => api.post('/auth/login', { email, password }),
+  me: () => api.get('/auth/me'),
+  logout: () => api.post('/auth/logout'),
   changePassword: (current_password, new_password) =>
     api.post('/auth/change-password', { current_password, new_password }),
   updateProfile: (name) => api.put('/auth/profile', { name }),
@@ -64,7 +55,6 @@ export function streamChat(
   { onSources, onToken, onFaq, onLimit, onUsage, onModel, onDone, onError } = {}
 ) {
   const controller = new AbortController()
-  const token = localStorage.getItem('astra_token')
 
   ;(async () => {
     let finished = false
@@ -75,19 +65,15 @@ export function streamChat(
     }
 
     try {
-      const res = await fetch(`${API_BASE}/chat/stream`, {
+      const res = await fetch('/api/chat/stream', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ query, client_filter, category_filter, model }),
         signal: controller.signal,
       })
 
       if (res.status === 401) {
-        localStorage.removeItem('astra_token')
-        localStorage.removeItem('astra_user')
         window.location.href = '/login'
         return
       }

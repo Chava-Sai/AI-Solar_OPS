@@ -1,24 +1,18 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { ArrowLeft, CheckCircle2, KeyRound, LogOut, Save, UserRound } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { authAPI } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 import agsLogo from '../assets/ags-logo-hero-dark.png'
 
 export default function Settings() {
   const navigate = useNavigate()
-  const initialUser = useMemo(() => JSON.parse(localStorage.getItem('astra_user') || '{}'), [])
-  const [user, setUser] = useState(initialUser)
-  const [name, setName] = useState(initialUser.name || '')
+  const { user, refreshUser, logout: authLogout } = useAuth()
+  const [name, setName] = useState(user?.name || '')
   const [nameState, setNameState] = useState({ saving: false, error: '', done: false })
   const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' })
   const [passwordState, setPasswordState] = useState({ saving: false, error: '', done: false })
-  const mustChangePassword = Boolean(user.must_change_password)
-
-  function storeSession(data) {
-    localStorage.setItem('astra_token', data.access_token)
-    localStorage.setItem('astra_user', JSON.stringify(data.user))
-    setUser(data.user)
-  }
+  const mustChangePassword = Boolean(user?.must_change_password)
 
   async function saveName(event) {
     event.preventDefault()
@@ -31,7 +25,7 @@ export default function Settings() {
     setNameState({ saving: true, error: '', done: false })
     try {
       const { data } = await authAPI.updateProfile(trimmed)
-      storeSession(data)
+      refreshUser(data.user)
       setNameState({ saving: false, error: '', done: true })
     } catch (error) {
       setNameState({
@@ -60,7 +54,7 @@ export default function Settings() {
     setPasswordState({ saving: true, error: '', done: false })
     try {
       const { data } = await authAPI.changePassword(passwords.current, passwords.next)
-      storeSession(data)
+      refreshUser(data.user)
       setPasswords({ current: '', next: '', confirm: '' })
       setPasswordState({ saving: false, error: '', done: true })
       if (mustChangePassword) setTimeout(() => navigate('/', { replace: true }), 700)
@@ -73,9 +67,8 @@ export default function Settings() {
     }
   }
 
-  function logout() {
-    localStorage.removeItem('astra_token')
-    localStorage.removeItem('astra_user')
+  async function logout() {
+    await authLogout()
     navigate('/login', { replace: true })
   }
 

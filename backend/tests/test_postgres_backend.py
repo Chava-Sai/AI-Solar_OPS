@@ -46,7 +46,7 @@ def pg_client(monkeypatch):
     from fastapi.testclient import TestClient
     from main import app as fastapi_app
 
-    with TestClient(fastapi_app) as c:
+    with TestClient(fastapi_app, base_url="https://testserver") as c:
         yield c
 
 
@@ -57,31 +57,25 @@ def test_seed_admin_exists_in_postgres(pg_client):
 
 
 def test_create_user_persists_in_postgres(pg_client):
-    login = pg_client.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "Arun@123"})
-    token = login.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    pg_client.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "Arun@123"})
 
     r = pg_client.post(
         "/api/admin/users",
         json={"email": "pgtest@amgsol.com", "name": "PG Test", "password": "TempPass1234", "role": "user"},
-        headers=headers,
     )
     assert r.status_code == 200, r.text
 
-    r = pg_client.get("/api/admin/users", headers=headers)
+    r = pg_client.get("/api/admin/users")
     emails = [u["email"].lower() for u in r.json()]
     assert "pgtest@amgsol.com" in emails
 
 
 def test_data_survives_a_fresh_process_reconnect(pg_client):
     """Simulates a Cloud Run container restart: new engine/session, same DB, data still there."""
-    login = pg_client.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "Arun@123"})
-    token = login.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    pg_client.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "Arun@123"})
     pg_client.post(
         "/api/admin/users",
         json={"email": "survives@amgsol.com", "name": "Survives Restart", "password": "TempPass1234", "role": "user"},
-        headers=headers,
     )
 
     # tear down every in-process module + engine, exactly like a fresh container boot
@@ -91,24 +85,21 @@ def test_data_survives_a_fresh_process_reconnect(pg_client):
     from fastapi.testclient import TestClient
     from main import app as fresh_app
 
-    with TestClient(fresh_app) as fresh_client:
-        r = fresh_client.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "Arun@123"})
-        token2 = r.json()["access_token"]
-        r = fresh_client.get("/api/admin/users", headers={"Authorization": f"Bearer {token2}"})
+    with TestClient(fresh_app, base_url="https://testserver") as fresh_client:
+        fresh_client.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "Arun@123"})
+        r = fresh_client.get("/api/admin/users")
         emails = [u["email"].lower() for u in r.json()]
         assert "survives@amgsol.com" in emails
 
 
 def test_conversations_persist_in_postgres(pg_client):
-    login = pg_client.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "Arun@123"})
-    token = login.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    pg_client.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "Arun@123"})
 
     payload = {"conversations": [{"id": "c1", "title": "PG conversation", "messages": []}]}
-    r = pg_client.put("/api/chat/conversations", json=payload, headers=headers)
+    r = pg_client.put("/api/chat/conversations", json=payload)
     assert r.status_code == 200
 
-    r = pg_client.get("/api/chat/conversations", headers=headers)
+    r = pg_client.get("/api/chat/conversations")
     assert r.json()["conversations"][0]["id"] == "c1"
 
 

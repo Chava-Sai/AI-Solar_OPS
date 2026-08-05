@@ -3,10 +3,12 @@ import threading
 import time
 from collections import deque
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from app.schemas import ChangePasswordRequest, LoginRequest, TokenResponse, UpdateNameRequest
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from app.schemas import AuthResponse, ChangePasswordRequest, LoginRequest, UpdateNameRequest
+from app.config import settings
 from app.database import get_user, update_password, update_name
 from app.auth import (
+    COOKIE_NAME,
     create_access_token,
     get_authenticated_user,
     get_current_user,
@@ -97,8 +99,24 @@ def _public_user(user: dict) -> dict:
         "must_change_password": user.get("must_change_password", False),
     }
 
-@router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, request: Request):
+def _issue_session(response: Response, user: dict):
+    """Set the httpOnly session cookie for this user. Same-site only — see
+    frontend/vercel.json, which proxies /api/* through the frontend's own
+    domain so this cookie is never cross-site."""
+    token = create_access_token(_token_payload(user))
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+
+
+@router.post("/login", response_model=AuthResponse)
+def login(body: LoginRequest, request: Request, response: Response):
     started = time.monotonic()
     email_key = body.email.strip().lower()
     ip = _client_ip(request)
@@ -129,18 +147,30 @@ def login(body: LoginRequest, request: Request):
 
     _clear_login_failures(email_key)
     record_login(user["email"])
-    token = create_access_token(_token_payload(user))
-    return TokenResponse(
-        access_token=token,
-        user=_public_user(user),
-    )
+    _issue_session(response, user)
+    return AuthResponse(user=_public_user(user))
 
-@router.get("/me")
+
+@router.post("/logout")
+def logout(response: Response):
+    response.delete_cookie(COOKIE_NAME, path="/")
+    return {"message": "Signed out."}
+
+
+@router.get("/me", response_model=AuthResponse)
 def get_me(current_user: dict = Depends(get_authenticated_user)):
-    return current_user
+    # Looked up fresh from the DB rather than echoing the JWT's own claims —
+    # keeps role/must_change_password accurate even if an admin changed them
+    # after this token was issued, and this is now the frontend's only way
+    # to learn who's signed in (no more reading it out of localStorage).
+    user = get_user(current_user["sub"])
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account no longer exists")
+    return AuthResponse(user=_public_user(user))
 
-@router.post("/change-password")
-def change_password(body: ChangePasswordRequest, current_user: dict = Depends(get_authenticated_user)):
+
+@router.post("/change-password", response_model=AuthResponse)
+def change_password(body: ChangePasswordRequest, response: Response, current_user: dict = Depends(get_authenticated_user)):
     user = get_user(current_user["sub"])
     if not user or not verify_password(body.current_password, user["hashed_password"]):
         raise HTTPException(
@@ -159,19 +189,18 @@ def change_password(body: ChangePasswordRequest, current_user: dict = Depends(ge
         )
     update_password(user["email"], body.new_password)
     updated = get_user(user["email"])
-    return TokenResponse(
-        access_token=create_access_token(_token_payload(updated)),
-        user=_public_user(updated),
-    )
+    _issue_session(response, updated)
+    return AuthResponse(user=_public_user(updated))
 
-@router.put("/profile")
-def update_profile(body: UpdateNameRequest, current_user: dict = Depends(get_current_user)):
+
+@router.put("/profile", response_model=AuthResponse)
+def update_profile(body: UpdateNameRequest, response: Response, current_user: dict = Depends(get_current_user)):
     """Change display name only — email is the login identity and can't change here."""
     try:
         updated = update_name(current_user["sub"], body.name)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    # Re-issue the token so its embedded "name" claim doesn't go stale until
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    # Re-issue the cookie so its embedded "name" claim doesn't go stale until
     # the next login (chat history, etc. read the name straight off the JWT).
-    token = create_access_token(_token_payload(updated))
-    return TokenResponse(access_token=token, user=_public_user(updated))
+    _issue_session(response, updated)
+    return AuthResponse(user=_public_user(updated))

@@ -42,7 +42,7 @@ def test_login_min_response_time_is_enforced(client, monkeypatch):
     from fastapi.testclient import TestClient
     from main import app as patched_app
 
-    with TestClient(patched_app) as c:
+    with TestClient(patched_app, base_url="https://testserver") as c:
         t0 = time.monotonic()
         c.post("/api/auth/login", json={"email": "nobody@amgsol.com", "password": "x"})
         elapsed = time.monotonic() - t0
@@ -57,7 +57,7 @@ def test_rate_limit_blocks_after_email_attempt_limit(client, monkeypatch):
     from fastapi.testclient import TestClient
     from main import app as patched_app
 
-    with TestClient(patched_app) as c:
+    with TestClient(patched_app, base_url="https://testserver") as c:
         for _ in range(3):
             r = c.post("/api/auth/login", json={"email": "target@amgsol.com", "password": "wrong"})
             assert r.status_code == 401
@@ -74,7 +74,7 @@ def test_rate_limit_does_not_block_a_different_email(client, monkeypatch):
     from fastapi.testclient import TestClient
     from main import app as patched_app
 
-    with TestClient(patched_app) as c:
+    with TestClient(patched_app, base_url="https://testserver") as c:
         for _ in range(2):
             c.post("/api/auth/login", json={"email": "a@amgsol.com", "password": "wrong"})
         r = c.post("/api/auth/login", json={"email": "b@amgsol.com", "password": "wrong"})
@@ -89,7 +89,7 @@ def test_successful_login_clears_prior_failures(client, monkeypatch):
     from fastapi.testclient import TestClient
     from main import app as patched_app
 
-    with TestClient(patched_app) as c:
+    with TestClient(patched_app, base_url="https://testserver") as c:
         c.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "wrong"})
         c.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "wrong"})
         r = c.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "Arun@123"})
@@ -100,11 +100,37 @@ def test_successful_login_clears_prior_failures(client, monkeypatch):
         assert r.status_code == 401  # still under the limit of 3
 
 
-def test_no_token_is_rejected(client):
+def test_no_session_cookie_is_rejected(client):
     r = client.get("/api/auth/me")
-    assert r.status_code in (401, 403)
-
-
-def test_garbage_token_is_rejected(client):
-    r = client.get("/api/auth/me", headers={"Authorization": "Bearer not-a-real-token"})
     assert r.status_code == 401
+
+
+def test_garbage_session_cookie_is_rejected(client):
+    client.cookies.set("astra_session", "not-a-real-token")
+    r = client.get("/api/auth/me")
+    assert r.status_code == 401
+
+
+def test_login_does_not_return_a_token_in_the_response_body(client):
+    """The JWT should only ever travel via the httpOnly cookie — never in JSON a script could read."""
+    r = client.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "Arun@123"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "access_token" not in body
+    assert "token" not in body
+    cookie_names = {c.name for c in client.cookies.jar}
+    assert "astra_session" in cookie_names
+    session_cookie = next(c for c in client.cookies.jar if c.name == "astra_session")
+    # httpx's cookiejar doesn't expose the HttpOnly flag directly, but the
+    # Set-Cookie header on the raw response does.
+    assert "httponly" in r.headers.get("set-cookie", "").lower()
+    assert "samesite=lax" in r.headers.get("set-cookie", "").lower()
+
+
+def test_logout_clears_the_session_cookie(client):
+    client.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "Arun@123"})
+    assert client.get("/api/auth/me").status_code == 200
+
+    r = client.post("/api/auth/logout")
+    assert r.status_code == 200
+    assert client.get("/api/auth/me").status_code == 401

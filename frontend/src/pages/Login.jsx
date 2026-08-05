@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BadgeCheck, Eye, EyeOff, ShieldCheck, Sparkles } from 'lucide-react'
 import { authAPI } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 import agsLogo from '../assets/ags-logo-hero-dark.png'
 import agsIcon from '../assets/ags-icon-512.png'
 
@@ -12,6 +13,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const { refreshUser } = useAuth()
 
   async function handleLogin(e) {
     e.preventDefault()
@@ -19,8 +21,7 @@ export default function Login() {
     setLoading(true)
     try {
       const { data } = await authAPI.login(email, password)
-      localStorage.setItem('astra_token', data.access_token)
-      localStorage.setItem('astra_user', JSON.stringify(data.user))
+      refreshUser(data.user)
       navigate(data.user.must_change_password ? '/settings' : '/', { replace: true })
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed. Check your credentials.')

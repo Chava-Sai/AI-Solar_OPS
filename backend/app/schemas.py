@@ -7,9 +7,8 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class AuthResponse(BaseModel):
+    """The JWT itself travels only in an httpOnly cookie, never in this body."""
     user: dict
 
 class ChangePasswordRequest(BaseModel):

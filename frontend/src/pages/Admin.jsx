@@ -23,6 +23,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { adminAPI, chatAPI, docsAPI } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 import agsLogo from '../assets/ags-logo-hero-dark.png'
 
 function formatReset(seconds) {
@@ -83,7 +84,7 @@ function statusIcon(status) {
 
 export default function Admin() {
   const navigate = useNavigate()
-  const user = JSON.parse(localStorage.getItem('astra_user') || '{}')
+  const { user } = useAuth()
   const fileRef = useRef()
   const [railOpen, setRailOpen] = useState(() => (
     typeof window === 'undefined' ? true : !window.matchMedia('(max-width: 980px)').matches

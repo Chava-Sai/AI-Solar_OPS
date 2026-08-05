@@ -289,6 +289,11 @@ body,
   overflow: hidden;
 }
 
+.session-loading {
+  height: 100%;
+  background: var(--surface, #f7f9fc);
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
   background:

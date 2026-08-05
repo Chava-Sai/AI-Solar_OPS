@@ -1,12 +1,16 @@
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, Request, status
 from app.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+# The JWT lives in an httpOnly cookie, not a JS-readable Authorization header
+# or localStorage — a script running on the page (e.g. from an XSS bug) can't
+# read it. This only works because the frontend proxies /api/* through its
+# own domain (see frontend/vercel.json), making the cookie same-site.
+COOKIE_NAME = "astra_session"
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
@@ -29,7 +33,14 @@ def decode_token(token: str) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-def get_authenticated_user(token: str = Depends(oauth2_scheme)) -> dict:
+def get_authenticated_user(request: Request) -> dict:
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return decode_token(token)
 
 def get_current_user(current_user: dict = Depends(get_authenticated_user)) -> dict:

@@ -3,23 +3,32 @@ import Login from './pages/Login'
 import Chat  from './pages/Chat'
 import Admin from './pages/Admin'
 import Settings from './pages/Settings'
+import { useAuth } from './context/AuthContext'
+
+// Session state resolves async now (a GET /auth/me round trip against the
+// httpOnly cookie, not a synchronous localStorage read) — every guard has to
+// wait for that before it can decide anything.
+function SessionGate({ children }) {
+  const { loading } = useAuth()
+  if (loading) return <div className="session-loading" aria-hidden="true" />
+  return children
+}
 
 const PrivateRoute = ({ children }) => {
-  const token = localStorage.getItem('astra_token')
-  const user = JSON.parse(localStorage.getItem('astra_user') || '{}')
-  if (!token) return <Navigate to="/login" replace />
+  const { user } = useAuth()
+  if (!user) return <Navigate to="/login" replace />
   if (user.must_change_password) return <Navigate to="/settings" replace />
   return children
 }
 
-const AuthenticatedRoute = ({ children }) => (
-  localStorage.getItem('astra_token') ? children : <Navigate to="/login" replace />
-)
+const AuthenticatedRoute = ({ children }) => {
+  const { user } = useAuth()
+  return user ? children : <Navigate to="/login" replace />
+}
 
 const AdminRoute = ({ children }) => {
-  const token = localStorage.getItem('astra_token')
-  const user  = JSON.parse(localStorage.getItem('astra_user') || '{}')
-  if (!token) return <Navigate to="/login" replace />
+  const { user } = useAuth()
+  if (!user) return <Navigate to="/login" replace />
   if (user.must_change_password) return <Navigate to="/settings" replace />
   if (user.role !== 'admin') return <Navigate to="/" replace />
   return children
@@ -27,12 +36,14 @@ const AdminRoute = ({ children }) => {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/settings" element={<AuthenticatedRoute><Settings /></AuthenticatedRoute>} />
-      <Route path="/"      element={<PrivateRoute><Chat /></PrivateRoute>} />
-      <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
-      <Route path="*"      element={<Navigate to="/" replace />} />
-    </Routes>
+    <SessionGate>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/settings" element={<AuthenticatedRoute><Settings /></AuthenticatedRoute>} />
+        <Route path="/"      element={<PrivateRoute><Chat /></PrivateRoute>} />
+        <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+        <Route path="*"      element={<Navigate to="/" replace />} />
+      </Routes>
+    </SessionGate>
   )
 }

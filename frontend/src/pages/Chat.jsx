@@ -28,6 +28,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { chatAPI, streamChat } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 import agsLogo from '../assets/ags-logo-hero-dark.png'
 
 function formatReset(seconds) {
@@ -438,7 +439,7 @@ function normalizeAnswerText(text = '') {
 
 export default function Chat() {
   const navigate = useNavigate()
-  const user = useMemo(() => JSON.parse(localStorage.getItem('astra_user') || '{}'), [])
+  const { user, logout: authLogout } = useAuth()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -710,9 +711,8 @@ export default function Chat() {
     setRenameValue('')
   }
 
-  function logout() {
-    localStorage.removeItem('astra_token')
-    localStorage.removeItem('astra_user')
+  async function logout() {
+    await authLogout()
     navigate('/login')
   }
 

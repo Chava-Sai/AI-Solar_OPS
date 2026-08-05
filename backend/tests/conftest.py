@@ -33,35 +33,42 @@ def client(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from main import app
 
-    with TestClient(app) as c:
+    # https:// base_url so the Secure-flagged session cookie actually gets
+    # stored/sent by httpx's cookie jar — matches real production (Vercel
+    # and Cloud Run are both HTTPS-only), unlike TestClient's plain-http
+    # default which would silently drop it.
+    with TestClient(app, base_url="https://testserver") as c:
         yield c
 
 
-@pytest.fixture()
-def admin_token(client):
+def _login_admin(client):
     r = client.post("/api/auth/login", json={"email": "arunpandian@amgsol.com", "password": "Arun@123"})
     assert r.status_code == 200, r.text
-    return r.json()["access_token"]
+    return r
 
 
 @pytest.fixture()
-def admin_headers(admin_token):
-    return {"Authorization": f"Bearer {admin_token}"}
+def admin_client(client):
+    """The shared `client`, logged in as the seed admin — auth rides on its
+    cookie jar from here on, exactly like a browser tab. Logging in again
+    later (as a different user) just replaces the cookie."""
+    _login_admin(client)
+    return client
 
 
 @pytest.fixture()
-def make_user(client, admin_headers):
-    """Factory: create a user via the admin API, return (email, password)."""
-    created = []
+def make_user(client):
+    """Factory: create a user via the admin API, return (email, password).
+    Logs `client` in as admin first every call, so it works regardless of
+    whose session the client was holding beforehand."""
 
     def _make(email="teammate@amgsol.com", password="TempPass1234", role="user", name="Teammate"):
+        _login_admin(client)
         r = client.post(
             "/api/admin/users",
             json={"email": email, "name": name, "password": password, "role": role},
-            headers=admin_headers,
         )
         assert r.status_code == 200, r.text
-        created.append(email)
         return email, password
 
     yield _make
