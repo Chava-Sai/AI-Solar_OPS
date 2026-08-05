@@ -3292,6 +3292,68 @@ button:disabled {
   transform: rotate(180deg);
 }
 
+.composer-shell.integrated {
+  min-height: 86px;
+  display: grid;
+  align-items: stretch;
+  gap: 2px;
+  padding: 9px 10px 8px;
+}
+
+.composer-input-row {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+}
+
+.composer-input-row .composer-prefix {
+  height: 38px;
+}
+
+.composer-input-row textarea {
+  min-width: 0;
+  min-height: 38px;
+  padding: 8px 0 4px;
+}
+
+.composer-toolbar {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  padding-left: 34px;
+}
+
+.model-selector-trigger.compact {
+  min-width: 0;
+  min-height: 34px;
+  gap: 7px;
+  padding: 6px 9px;
+  border-color: transparent;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  box-shadow: none;
+  color: var(--muted);
+}
+
+.model-selector-trigger.compact:hover,
+.model-selector-trigger.compact.open {
+  border-color: rgba(103, 150, 50, 0.28);
+  background: rgba(103, 150, 50, 0.1);
+  box-shadow: none;
+  color: var(--green-dark);
+}
+
+.model-compact-label {
+  max-width: 155px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .model-picker-panel {
   position: fixed;
   z-index: 82;
@@ -3955,6 +4017,10 @@ button:disabled {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.10);
 }
 
+.sales-hub-shell .composer-shell.integrated {
+  min-height: 86px;
+}
+
 .sales-hub-shell .composer-shell textarea {
   font-size: 15.5px;
 }
@@ -4447,6 +4513,30 @@ button:disabled {
 
   .sales-hub-shell .model-selector-copy strong {
     max-width: 132px;
+  }
+
+  .sales-hub-shell .composer-shell.integrated {
+    min-height: 82px;
+    gap: 1px;
+    padding: 8px;
+  }
+
+  .sales-hub-shell .composer-toolbar {
+    padding-left: 26px;
+  }
+
+  .sales-hub-shell .composer-toolbar .model-selector-anchor,
+  .sales-hub-shell .model-selector-trigger.compact {
+    width: auto;
+  }
+
+  .sales-hub-shell .model-selector-trigger.compact {
+    min-width: 0;
+    min-height: 34px;
+  }
+
+  .sales-hub-shell .model-compact-label {
+    max-width: 126px;
   }
 
   .sales-hub-shell .chat-scroll {

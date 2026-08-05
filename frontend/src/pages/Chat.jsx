@@ -54,7 +54,7 @@ function familyList(usage) {
   }))
 }
 
-function ModelSelector({ usage, modelPref, onPick }) {
+function ModelSelector({ usage, modelPref, onPick, compact = false }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState(null)
   const btnRef = useRef(null)
@@ -80,17 +80,26 @@ function ModelSelector({ usage, modelPref, onPick }) {
     <div className="model-selector-anchor">
       <button
         ref={btnRef}
-        className={`model-selector-trigger ${open ? 'open' : ''}`}
+        className={`model-selector-trigger ${compact ? 'compact' : ''} ${open ? 'open' : ''}`}
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={toggle}
       >
-        <span className="model-selector-icon"><Sparkles size={15} /></span>
-        <span className="model-selector-copy">
-          <small>AI model</small>
-          <strong>{selectedModel?.label || 'Auto'}</strong>
-        </span>
-        {!selectedModel && <span className="recommended-badge">Recommended</span>}
+        {compact ? (
+          <>
+            <Sparkles size={14} />
+            <strong className="model-compact-label">{selectedModel?.label || 'Auto'}</strong>
+          </>
+        ) : (
+          <>
+            <span className="model-selector-icon"><Sparkles size={15} /></span>
+            <span className="model-selector-copy">
+              <small>AI model</small>
+              <strong>{selectedModel?.label || 'Auto'}</strong>
+            </span>
+            {!selectedModel && <span className="recommended-badge">Recommended</span>}
+          </>
+        )}
         <ChevronDown size={16} className="model-selector-chevron" />
       </button>
 
@@ -1038,35 +1047,37 @@ export default function Chat() {
               answered instantly from the FAQ cache (free).
             </div>
           )}
-          <div className="composer-model-row">
-            <ModelSelector usage={usage} modelPref={modelPref} onPick={setModelPref} />
-          </div>
-          <div className="composer-shell">
-            <div className="composer-prefix">
-              <Search size={18} />
+          <div className="composer-shell integrated">
+            <div className="composer-input-row">
+              <div className="composer-prefix">
+                <Search size={18} />
+              </div>
+              <textarea
+                ref={taRef}
+                rows={1}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    send()
+                  }
+                }}
+                placeholder="Ask about an SOP, escalation, alert, case workflow, or report..."
+              />
             </div>
-            <textarea
-              ref={taRef}
-              rows={1}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  send()
-                }
-              }}
-              placeholder="Ask about an SOP, escalation, alert, case workflow, or report..."
-            />
-            {streaming ? (
-              <button className="send-button stop" onClick={stop} title="Stop generation" aria-label="Stop generation">
-                <Square size={15} fill="currentColor" />
-              </button>
-            ) : (
-              <button className="send-button" onClick={() => send()} disabled={!input.trim()} title="Send" aria-label="Send">
-                <ArrowUp size={19} />
-              </button>
-            )}
+            <div className="composer-toolbar">
+              <ModelSelector compact usage={usage} modelPref={modelPref} onPick={setModelPref} />
+              {streaming ? (
+                <button className="send-button stop" onClick={stop} title="Stop generation" aria-label="Stop generation">
+                  <Square size={15} fill="currentColor" />
+                </button>
+              ) : (
+                <button className="send-button" onClick={() => send()} disabled={!input.trim()} title="Send" aria-label="Send">
+                  <ArrowUp size={19} />
+                </button>
+              )}
+            </div>
           </div>
           <p>Astra AI can make mistakes. Confirm critical field steps against source SOPs.</p>
         </footer>
