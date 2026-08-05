@@ -6,10 +6,16 @@ import os
 import logging
 import chromadb
 
+from app import storage
+
 logger = logging.getLogger(__name__)
 
 CHROMA_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_db")
 COLLECTION_NAME = "sop_documents"
+
+# Must run before PersistentClient below touches CHROMA_PATH — pulls down
+# any GCS-backed state from runtime uploads before this boot's client opens it.
+storage.restore_chroma_backup_if_configured(CHROMA_PATH)
 
 _client = chromadb.PersistentClient(path=CHROMA_PATH)
 

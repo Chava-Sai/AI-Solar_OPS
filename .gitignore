@@ -12,6 +12,11 @@ backend/venv/
 frontend/node_modules/
 frontend/dist/
 
+# ── Playwright e2e output ───────────────────────────────
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+
 # ── runtime / local data (not needed for deploy) ────────
 backend/usage_data.json
 backend/users_data.json

@@ -40,7 +40,7 @@ def pg_client(monkeypatch):
     engine = dbmod.get_engine()
     # start every test from a clean slate — this is a scratch dev DB, not shared state
     with engine.begin() as conn:
-        for table in ("chat_log", "usage_daily", "conversation_buckets", "user_id_seq", "users"):
+        for table in ("chat_log", "usage_daily", "conversation_buckets", "login_failures", "user_id_seq", "users"):
             conn.exec_driver_sql(f'TRUNCATE TABLE {table} CASCADE')
 
     from fastapi.testclient import TestClient
@@ -116,3 +116,42 @@ def test_usage_recording_persists_in_postgres(pg_client):
     import app.usage as usage2
     snap2 = usage2.get_usage("arunpandian@amgsol.com")
     assert snap2["models"]["gpt120"]["tokens_used"] == 42
+
+
+def test_rate_limit_blocks_after_limit_in_postgres(pg_client, monkeypatch):
+    monkeypatch.setenv("LOGIN_EMAIL_ATTEMPT_LIMIT", "3")
+    import sys as _sys
+    for mod in ("app.routers.auth_router", "main"):
+        _sys.modules.pop(mod, None)
+    from fastapi.testclient import TestClient
+    from main import app as patched_app
+
+    with TestClient(patched_app, base_url="https://testserver") as c:
+        for _ in range(3):
+            r = c.post("/api/auth/login", json={"email": "pgtarget@amgsol.com", "password": "wrong"})
+            assert r.status_code == 401
+        r = c.post("/api/auth/login", json={"email": "pgtarget@amgsol.com", "password": "wrong"})
+        assert r.status_code == 429
+        assert "Retry-After" in r.headers
+
+
+def test_rate_limit_state_is_shared_across_separate_connections(pg_client, monkeypatch):
+    """The actual point of this migration: two independent TestClients (standing
+    in for two separate Cloud Run instances) must see the same attempt count —
+    proves this isn't process-local in-memory state anymore."""
+    monkeypatch.setenv("LOGIN_EMAIL_ATTEMPT_LIMIT", "3")
+    import sys as _sys
+    for mod in ("app.routers.auth_router", "main"):
+        _sys.modules.pop(mod, None)
+    from fastapi.testclient import TestClient
+    from main import app as patched_app
+
+    with TestClient(patched_app, base_url="https://testserver") as instance_a:
+        for _ in range(3):
+            instance_a.post("/api/auth/login", json={"email": "shared@amgsol.com", "password": "wrong"})
+
+    # a brand-new client/session, zero attempts of its own — no shared
+    # in-process state with instance_a at all, only whatever's in Postgres
+    with TestClient(patched_app, base_url="https://testserver") as instance_b:
+        r = instance_b.post("/api/auth/login", json={"email": "shared@amgsol.com", "password": "wrong"})
+        assert r.status_code == 429, "instance B should see instance A's 3 prior failures via Postgres and block immediately"

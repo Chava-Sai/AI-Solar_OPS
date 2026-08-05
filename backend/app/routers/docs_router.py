@@ -10,8 +10,9 @@ from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from app.auth import get_current_user, require_role
-from app.rag.vector_store import get_stats, delete_document_chunks
+from app.rag.vector_store import get_stats, delete_document_chunks, CHROMA_PATH
 from app.ingestion.parsers import SUPPORTED_FORMATS
+from app import storage
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -34,10 +35,12 @@ async def upload_document(
     if ext not in SUPPORTED_FORMATS:
         raise HTTPException(400, f"Unsupported format '{ext}'. Use: {SUPPORTED_FORMATS}")
 
-    # Save file
+    # Save file locally — the ingestion pipeline needs a real path to parse.
+    # This copy is only transient; GCS (when configured) is the durable one.
     save_path = UPLOAD_DIR / file.filename
     content = await file.read()
     save_path.write_bytes(content)
+    storage.upload_document_file(save_path, file.filename)
 
     # Start ingestion in background
     job_id = file.filename
@@ -57,6 +60,7 @@ async def _run_ingestion(file_path: str, category: str, client_name: str, job_id
         result = await loop.run_in_executor(None, ingest_document, file_path, category, client_name)
         _ingestion_jobs[job_id] = result
         logger.info(f"[Docs] Ingestion complete: {result}")
+        storage.backup_chroma_db(CHROMA_PATH)
     except Exception as e:
         _ingestion_jobs[job_id] = {"status": "error", "message": str(e)}
         logger.error(f"[Docs] Ingestion failed: {e}")
@@ -82,8 +86,10 @@ def delete_document(
 ):
     # Remove from vector store
     delete_document_chunks(filename)
+    storage.backup_chroma_db(CHROMA_PATH)
     # Remove file if it exists
     file_path = UPLOAD_DIR / filename
     if file_path.exists():
         file_path.unlink()
+    storage.delete_document_file(filename)
     return {"message": f"'{filename}' deleted successfully"}

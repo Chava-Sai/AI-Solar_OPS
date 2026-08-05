@@ -2,6 +2,7 @@ import os
 import threading
 import time
 from collections import deque
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from app.schemas import AuthResponse, ChangePasswordRequest, LoginRequest, UpdateNameRequest
@@ -16,6 +17,7 @@ from app.auth import (
     verify_password,
 )
 from app.usage import record_login
+from app import db as dbmod
 
 router = APIRouter()
 
@@ -49,6 +51,8 @@ def _cleanup_stale_attempts(now: float):
 
 
 def _rate_limit_state(email: str, ip: str, now: float) -> tuple[bool, int]:
+    if dbmod.is_enabled():
+        return _pg_rate_limit_state(email, ip)
     with _login_lock:
         _cleanup_stale_attempts(now)
         checks = (
@@ -67,6 +71,9 @@ def _rate_limit_state(email: str, ip: str, now: float) -> tuple[bool, int]:
 
 
 def _record_login_failure(email: str, ip: str, now: float):
+    if dbmod.is_enabled():
+        _pg_record_login_failure(email, ip)
+        return
     with _login_lock:
         _cleanup_stale_attempts(now)
         for bucket, key in (("email", email), ("ip", ip)):
@@ -76,8 +83,58 @@ def _record_login_failure(email: str, ip: str, now: float):
 
 
 def _clear_login_failures(email: str):
+    if dbmod.is_enabled():
+        _pg_clear_login_failures(email)
+        return
     with _login_lock:
         _login_failures["email"].pop(email, None)
+
+
+# ── Postgres-backed rate limiting (shared across Cloud Run instances) ──
+def _pg_rate_limit_state(email: str, ip: str) -> tuple[bool, int]:
+    session = dbmod.get_session()
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=LOGIN_WINDOW_SECONDS)
+        session.query(dbmod.LoginFailure).filter(dbmod.LoginFailure.attempted_at <= cutoff).delete()
+        session.commit()
+
+        retry_after = 0
+        blocked = False
+        for bucket, key, limit in (("email", email, LOGIN_EMAIL_LIMIT), ("ip", ip, LOGIN_IP_LIMIT)):
+            rows = (
+                session.query(dbmod.LoginFailure)
+                .filter(dbmod.LoginFailure.bucket == bucket, dbmod.LoginFailure.key == key)
+                .order_by(dbmod.LoginFailure.attempted_at.asc())
+                .all()
+            )
+            if len(rows) >= limit:
+                blocked = True
+                seconds_left = LOGIN_WINDOW_SECONDS - (datetime.now(timezone.utc) - rows[0].attempted_at).total_seconds()
+                retry_after = max(retry_after, int(seconds_left) + 1)
+        return blocked, retry_after
+    finally:
+        session.close()
+
+
+def _pg_record_login_failure(email: str, ip: str):
+    session = dbmod.get_session()
+    try:
+        session.add(dbmod.LoginFailure(bucket="email", key=email))
+        session.add(dbmod.LoginFailure(bucket="ip", key=ip))
+        session.commit()
+    finally:
+        session.close()
+
+
+def _pg_clear_login_failures(email: str):
+    session = dbmod.get_session()
+    try:
+        session.query(dbmod.LoginFailure).filter(
+            dbmod.LoginFailure.bucket == "email", dbmod.LoginFailure.key == email
+        ).delete()
+        session.commit()
+    finally:
+        session.close()
 
 
 def _token_payload(user: dict) -> dict:

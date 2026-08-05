@@ -73,6 +73,23 @@ class ChatLog(Base):
     timestamp = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
+class LoginFailure(Base):
+    """
+    One row per failed login attempt, bucketed by email or by IP. In-memory
+    rate limiting only works because Cloud Run currently runs a single
+    instance (min/max instances = 1) — the moment it scales past that, each
+    instance would keep its own counters and an attacker could just get
+    load-balanced around the limit. This table is the shared state that
+    fixes that, whenever DATABASE_URL is set.
+    """
+    __tablename__ = "login_failures"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    bucket = Column(String, nullable=False, index=True)  # "email" | "ip"
+    key = Column(String, nullable=False, index=True)
+    attempted_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 _engine = None
 _SessionLocal = None
 
