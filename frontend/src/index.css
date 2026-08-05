@@ -2591,21 +2591,60 @@ button:disabled {
   }
 }
 
-/* ── Daily usage ring (Claude-style quota indicator) ─────────────── */
+/* ── Daily usage capacity control ────────────────────────────── */
 .usage-ring {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 12px 6px 8px;
-  border-radius: 999px;
+  gap: 9px;
+  min-height: 44px;
+  padding: 6px 12px 6px 9px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--line);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
-  font-size: 12px;
-  font-weight: 750;
   color: var(--muted);
-  cursor: default;
+  cursor: pointer;
   user-select: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.usage-ring:hover {
+  border-color: rgba(103, 150, 50, 0.45);
+  box-shadow: 0 6px 18px rgba(31, 41, 55, 0.09);
+}
+
+.usage-ring svg {
+  flex: 0 0 auto;
+}
+
+.usage-ring-copy {
+  display: grid;
+  gap: 1px;
+  text-align: left;
+  line-height: 1.15;
+}
+
+.usage-ring-copy small {
+  color: var(--soft);
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.usage-ring-copy strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.usage-mobile-text {
+  display: none;
+}
+
+.usage-chevron {
+  color: var(--soft);
+  transition: transform 140ms ease;
 }
 
 .usage-ring .ring-track {
@@ -2680,13 +2719,11 @@ button:disabled {
 }
 
 .usage-panel {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
+  position: fixed;
   z-index: 61;
-  width: 330px;
+  width: 350px;
   padding: 16px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   border: 1px solid var(--line);
   background: var(--surface);
   box-shadow: var(--shadow-lg);
@@ -2719,6 +2756,39 @@ button:disabled {
   margin-top: 2px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
+}
+
+.usage-overview {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(103, 150, 50, 0.2);
+  background: rgba(103, 150, 50, 0.08);
+  color: var(--green-dark);
+}
+
+.usage-overview strong {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.usage-overview span {
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.usage-overview.warn {
+  color: var(--amber-dark);
+  border-color: rgba(244, 192, 22, 0.35);
+  background: rgba(244, 192, 22, 0.1);
+}
+
+.usage-overview.limit {
+  color: var(--red);
+  border-color: rgba(217, 45, 32, 0.25);
+  background: rgba(217, 45, 32, 0.07);
 }
 
 .usage-row {
@@ -3132,6 +3202,231 @@ button:disabled {
 }
 
 /* ── Sales Hub visual shell for Astra chat ───────────────────────── */
+/* Focused model selector in the composer. */
+.composer-model-row {
+  max-width: 920px;
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.model-selector-anchor {
+  position: relative;
+}
+
+.model-selector-trigger {
+  min-width: 274px;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 10px 5px 6px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink);
+  text-align: left;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.model-selector-trigger:hover,
+.model-selector-trigger.open {
+  border-color: rgba(103, 150, 50, 0.45);
+  box-shadow: 0 6px 18px rgba(31, 41, 55, 0.09);
+}
+
+.model-selector-icon,
+.model-option-mark {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--green-dark);
+  background: rgba(103, 150, 50, 0.11);
+}
+
+.model-selector-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  margin-right: auto;
+  line-height: 1.1;
+}
+
+.model-selector-copy small {
+  color: var(--soft);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.model-selector-copy strong {
+  max-width: 145px;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recommended-badge {
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--green-dark);
+  background: rgba(103, 150, 50, 0.11);
+  font-size: 9.5px;
+  font-weight: 800;
+}
+
+.model-selector-chevron {
+  color: var(--soft);
+  transition: transform 140ms ease;
+}
+
+.model-selector-trigger.open .model-selector-chevron {
+  transform: rotate(180deg);
+}
+
+.model-picker-panel {
+  position: fixed;
+  z-index: 82;
+  width: 390px;
+  max-height: min(590px, calc(100dvh - 120px));
+  padding: 14px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.model-picker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 2px 2px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.model-picker-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.model-picker-head strong {
+  color: var(--ink-strong);
+  font-size: 14px;
+}
+
+.model-picker-head span {
+  color: var(--soft);
+  font-size: 11.5px;
+}
+
+.model-option {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.model-option:hover:not(:disabled) {
+  background: var(--surface-soft);
+}
+
+.model-option.active {
+  border-color: rgba(103, 150, 50, 0.3);
+  background: rgba(103, 150, 50, 0.08);
+  color: var(--green-dark);
+}
+
+.model-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.model-option-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  flex: 1;
+}
+
+.model-option-copy strong {
+  color: inherit;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.model-option-copy strong em {
+  margin-left: 6px;
+  color: var(--green-dark);
+  font-size: 9.5px;
+  font-style: normal;
+  text-transform: uppercase;
+}
+
+.model-option-copy small {
+  color: var(--soft);
+  font-size: 11px;
+}
+
+.model-family-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.model-family {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.model-family-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 6px 5px;
+}
+
+.model-family-head strong {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.model-family-head span {
+  color: var(--soft);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.model-version-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  margin: 0 11px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(103, 150, 50, 0.1);
+}
+
 .sales-hub-shell {
   --green: #679632;
   --green-dark: #587f2b;
@@ -3984,6 +4279,33 @@ button:disabled {
     touch-action: pan-y;
   }
 
+  .usage-backdrop {
+    z-index: 120;
+    background: rgba(15, 23, 42, 0.22);
+  }
+
+  .usage-panel,
+  .model-picker-panel {
+    position: fixed !important;
+    left: 12px !important;
+    right: 12px !important;
+    top: auto !important;
+    bottom: max(12px, env(safe-area-inset-bottom)) !important;
+    width: auto;
+    max-width: none;
+    max-height: min(72dvh, 620px);
+    overflow-y: auto;
+    border-radius: 8px;
+  }
+
+  .usage-panel {
+    z-index: 121;
+  }
+
+  .model-picker-panel {
+    z-index: 122;
+  }
+
   .sales-hub-shell,
   .sales-hub-shell.sidebar-collapsed {
     width: 100%;
@@ -4048,6 +4370,23 @@ button:disabled {
     gap: 8px;
   }
 
+  .sales-hub-shell .usage-ring {
+    min-height: 38px;
+    padding: 5px 9px 5px 7px;
+    border-radius: 8px;
+  }
+
+  .sales-hub-shell .usage-ring-copy small,
+  .sales-hub-shell .usage-full-text,
+  .sales-hub-shell .usage-chevron {
+    display: none;
+  }
+
+  .sales-hub-shell .usage-mobile-text {
+    display: block;
+    font-size: 11.5px;
+  }
+
   .sales-hub-shell .status-pill,
   .sales-hub-shell .usage-ring {
     min-height: 34px;
@@ -4091,6 +4430,21 @@ button:disabled {
     max-height: 42dvh;
     overflow-y: auto;
     z-index: 122;
+  }
+
+  .sales-hub-shell .composer-model-row,
+  .sales-hub-shell .model-selector-anchor,
+  .sales-hub-shell .model-selector-trigger {
+    width: 100%;
+  }
+
+  .sales-hub-shell .model-selector-trigger {
+    min-width: 0;
+    min-height: 40px;
+  }
+
+  .sales-hub-shell .model-selector-copy strong {
+    max-width: 132px;
   }
 
   .sales-hub-shell .chat-scroll {

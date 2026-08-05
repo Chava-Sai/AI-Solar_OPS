@@ -6,6 +6,7 @@ import {
   ArrowUp,
   Bot,
   Check,
+  ChevronDown,
   ChevronRight,
   Clipboard,
   Clock3,
@@ -53,123 +54,138 @@ function familyList(usage) {
   }))
 }
 
-function shortLabel(fullLabel) {
-  return fullLabel.split(' ').pop() // "GPT-OSS 120B" → "120B", "Llama 3.1 8B" → "8B"
-}
-
-/** Which specific member of this family is currently selected, if any. */
-function activeMemberOf(family, modelPref) {
-  return family.members.includes(modelPref) ? modelPref : null
-}
-
-/**
- * A family's picker button. Single-model families select directly on click;
- * multi-model families open a small portal-rendered flyout listing each
- * specific size as its own selectable row (checkmark on the active one) —
- * explicit choices, not a "click again to cycle" guessing game.
- */
-function FamilyPickerButton({ fam, usage, modelPref, onPick, variant = 'segment' }) {
+function ModelSelector({ usage, modelPref, onPick }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState(null)
   const btnRef = useRef(null)
-  const active = activeMemberOf(fam, modelPref)
-  const activeModel = active ? usage.models[active] : null
-  const multi = fam.members.length > 1
+  const selectedModel = modelPref ? usage?.models?.[modelPref] : null
 
   function toggle() {
-    if (!multi) {
-      onPick(fam.members[0])
-      return
-    }
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect()
-      setPos({ bottom: window.innerHeight - r.top + 8, left: Math.max(8, Math.min(r.left, window.innerWidth - 240 - 12)) })
+      setPos({
+        bottom: window.innerHeight - r.top + 8,
+        left: Math.max(12, Math.min(r.left, window.innerWidth - 390 - 12)),
+      })
     }
     setOpen((v) => !v)
   }
 
-  function pick(memberKey) {
-    onPick(memberKey)
+  function pick(modelKey) {
+    onPick(modelKey)
     setOpen(false)
   }
 
   return (
-    <>
+    <div className="model-selector-anchor">
       <button
         ref={btnRef}
-        className={variant === 'segment' ? (active ? 'active' : '') : `model-choice ${active ? 'active' : ''}`}
-        disabled={fam.exhausted}
-        title={fam.exhausted ? `${fam.label} daily limit reached` : multi ? `${fam.label} — choose a size` : fam.label}
+        className={`model-selector-trigger ${open ? 'open' : ''}`}
+        aria-expanded={open}
+        aria-haspopup="dialog"
         onClick={toggle}
       >
-        {variant === 'segment' ? (
-          <>
-            {fam.label}
-            {active && <small className="seg-size">{shortLabel(activeModel.label)}</small>}
-            {multi && <ChevronRight size={11} className={`seg-cycle ${open ? 'open' : ''}`} />}
-            <span className="seg-pct">{fam.exhausted ? 'Limit' : `${fam.percentUsed}%`}</span>
-          </>
-        ) : (
-          <>
-            <span>
-              {fam.label}
-              <small>
-                {fam.exhausted
-                  ? 'Daily limit reached'
-                  : activeModel
-                    ? `Using ${shortLabel(activeModel.label)} · ${activeModel.percent_used}% used`
-                    : multi ? `${fam.percentUsed}% used today — choose a size` : `${fam.percentUsed}% used today`}
-              </small>
-            </span>
-            {active ? <Check size={15} /> : multi && <ChevronRight size={14} />}
-          </>
-        )}
+        <span className="model-selector-icon"><Sparkles size={15} /></span>
+        <span className="model-selector-copy">
+          <small>AI model</small>
+          <strong>{selectedModel?.label || 'Auto'}</strong>
+        </span>
+        {!selectedModel && <span className="recommended-badge">Recommended</span>}
+        <ChevronDown size={16} className="model-selector-chevron" />
       </button>
-      {open && multi && pos && createPortal(
+
+      {open && pos && createPortal(
         <>
           <div className="usage-backdrop" onClick={() => setOpen(false)} />
-          <div className="family-flyout" style={{ position: 'fixed', bottom: pos.bottom, left: pos.left }}>
-            {fam.members.map((m) => {
-              const model = usage.models[m]
-              return (
-                <button
-                  key={m}
-                  className={`model-choice ${modelPref === m ? 'active' : ''}`}
-                  disabled={model.exhausted}
-                  onClick={() => pick(m)}
-                >
-                  <span>
-                    {shortLabel(model.label)}
-                    <small>{model.exhausted ? 'Daily limit reached' : `${model.percent_used}% used`}</small>
-                  </span>
-                  {modelPref === m && <Check size={14} />}
-                </button>
-              )
-            })}
+          <div
+            className="model-picker-panel"
+            role="dialog"
+            aria-label="Choose AI model"
+            style={{ bottom: pos.bottom, left: pos.left }}
+          >
+            <div className="model-picker-head">
+              <div>
+                <strong>Choose AI model</strong>
+                <span>Select a version or let Astra choose.</span>
+              </div>
+              <button className="icon-button" onClick={() => setOpen(false)} aria-label="Close model selector">
+                <X size={16} />
+              </button>
+            </div>
+
+            <button className={`model-option auto ${modelPref === null ? 'active' : ''}`} onClick={() => pick(null)}>
+              <span className="model-option-mark"><Sparkles size={16} /></span>
+              <span className="model-option-copy">
+                <strong>Auto <em>Recommended</em></strong>
+                <small>Uses the best available model for each question</small>
+              </span>
+              {modelPref === null && <Check size={17} />}
+            </button>
+
+            <div className="model-family-list">
+              {usage && familyList(usage).map((fam) => (
+                <section className="model-family" key={fam.key}>
+                  <div className="model-family-head">
+                    <strong>{fam.label}</strong>
+                    <span>{fam.exhausted ? 'Daily limit reached' : `${Math.max(0, 100 - fam.percentUsed)}% available`}</span>
+                  </div>
+                  {fam.members.map((memberKey) => {
+                    const model = usage.models[memberKey]
+                    return (
+                      <button
+                        key={memberKey}
+                        className={`model-option ${modelPref === memberKey ? 'active' : ''}`}
+                        disabled={model.exhausted}
+                        onClick={() => pick(memberKey)}
+                      >
+                        <span className="model-version-dot" />
+                        <span className="model-option-copy">
+                          <strong>{model.label}</strong>
+                          <small>{model.exhausted ? 'Unavailable until reset' : 'Available today'}</small>
+                        </span>
+                        {modelPref === memberKey && <Check size={17} />}
+                      </button>
+                    )
+                  })}
+                </section>
+              ))}
+            </div>
           </div>
         </>,
         document.body
       )}
-    </>
+    </div>
   )
 }
 
-/** Clickable daily-quota ring → Claude-style per-model usage panel. */
-function UsageRing({ usage, modelPref, onPickModel }) {
+/** Compact daily-capacity control with a detailed usage breakdown. */
+function UsageRing({ usage }) {
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)
+  const btnRef = useRef(null)
   if (!usage) return null
   const pct = Math.min(100, usage.percent_used || 0)
   const r = 8.5
   const c = 2 * Math.PI * r
   const tone = usage.limit_reached ? 'limit' : pct >= 75 ? 'warn' : 'ok'
+  const available = Math.max(0, 100 - pct)
+
+  function toggle() {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect()
+      setPos({ top: rect.bottom + 10, right: Math.max(12, window.innerWidth - rect.right) })
+    }
+    setOpen((value) => !value)
+  }
 
   return (
     <div className="usage-anchor">
       <button
+        ref={btnRef}
         className={`usage-ring ${tone}`}
-        onClick={() => setOpen((v) => !v)}
-        title="Daily usage limits — click for details"
-        aria-label={`Daily AI usage ${pct} percent — open details`}
+        onClick={toggle}
+        title="Open daily usage details"
+        aria-label={`Daily AI usage, ${available} percent available — open details`}
       >
         <svg viewBox="0 0 22 22" width="22" height="22">
           <circle cx="11" cy="11" r={r} fill="none" strokeWidth="3" className="ring-track" />
@@ -181,16 +197,26 @@ function UsageRing({ usage, modelPref, onPickModel }) {
             transform="rotate(-90 11 11)"
           />
         </svg>
-        <span>{usage.limit_reached ? 'Limit' : `${pct}%`}</span>
+        <span className="usage-ring-copy">
+          <small>Daily usage</small>
+          <strong className="usage-full-text">{usage.limit_reached ? 'Limit reached' : `${available}% available`}</strong>
+          <strong className="usage-mobile-text">{usage.limit_reached ? 'Limit' : `${available}% left`}</strong>
+        </span>
+        <ChevronDown size={14} className="usage-chevron" />
       </button>
 
-      {open && (
+      {open && pos && createPortal(
         <>
           <div className="usage-backdrop" onClick={() => setOpen(false)} />
-          <div className="usage-panel" role="dialog" aria-label="Daily usage limits">
+          <div className="usage-panel" role="dialog" aria-label="Daily usage limits" style={pos}>
             <div className="usage-panel-head">
-              <span>Daily usage limits · Groq free tier</span>
+              <span>Daily AI usage</span>
               <small>{formatReset(usage.resets_in_seconds)}</small>
+            </div>
+
+            <div className={`usage-overview ${tone}`}>
+              <strong>{usage.limit_reached ? '0%' : `${available}%`}</strong>
+              <span>{usage.limit_reached ? 'No model capacity remaining' : 'Available for today'}</span>
             </div>
 
             {familyList(usage).map((fam) => {
@@ -214,33 +240,9 @@ function UsageRing({ usage, modelPref, onPickModel }) {
               FAQ instant answers: <strong>{usage.faq_hits}</strong> (free, unlimited)
             </div>
 
-            <div className="usage-panel-head model-head">
-              <span>Model preference</span>
-            </div>
-            <div className="model-choice-list">
-              <button
-                className={`model-choice ${modelPref === null ? 'active' : ''}`}
-                onClick={() => { onPickModel(null); setOpen(false) }}
-              >
-                <span>
-                  Auto
-                  <small>Best available model first</small>
-                </span>
-                {modelPref === null && <Check size={15} />}
-              </button>
-              {familyList(usage).map((fam) => (
-                <FamilyPickerButton
-                  key={fam.key}
-                  fam={fam}
-                  usage={usage}
-                  modelPref={modelPref}
-                  onPick={(key) => { onPickModel(key); setOpen(false) }}
-                  variant="list"
-                />
-              ))}
-            </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   )
@@ -903,7 +905,7 @@ export default function Chat() {
             </div>
           </div>
           <div className="topbar-actions">
-            <UsageRing usage={usage} modelPref={modelPref} onPickModel={setModelPref} />
+            <UsageRing usage={usage} />
             <div className="status-pill">
               {category}
             </div>
@@ -1037,26 +1039,7 @@ export default function Chat() {
             </div>
           )}
           <div className="composer-model-row">
-            <span>Model</span>
-            <div className="model-segment" role="radiogroup" aria-label="Model preference">
-              <button
-                className={modelPref === null ? 'active' : ''}
-                title="Auto — best available model first"
-                onClick={() => setModelPref(null)}
-              >
-                Auto
-              </button>
-              {usage && familyList(usage).map((fam) => (
-                <FamilyPickerButton
-                  key={fam.key}
-                  fam={fam}
-                  usage={usage}
-                  modelPref={modelPref}
-                  onPick={setModelPref}
-                  variant="segment"
-                />
-              ))}
-            </div>
+            <ModelSelector usage={usage} modelPref={modelPref} onPick={setModelPref} />
           </div>
           <div className="composer-shell">
             <div className="composer-prefix">
