@@ -380,6 +380,8 @@ button:disabled {
   align-items: flex-start;
   gap: 7px;
   padding: 22px 20px 18px;
+  border-bottom: 1px solid var(--nav-line);
+  margin-bottom: 14px;
 }
 
 .brand-lockup.large {
@@ -1740,8 +1742,6 @@ button:disabled {
 
 .rail-link {
   width: calc(100% - 32px);
-  background: transparent;
-  justify-content: flex-start;
 }
 
 .rail-link.active {
