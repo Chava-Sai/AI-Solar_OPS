@@ -18,7 +18,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const isLoginRequest = err.config?.url?.includes('/auth/login')
+    const hadSession = Boolean(localStorage.getItem('astra_token'))
+    if (err.response?.status === 401 && hadSession && !isLoginRequest) {
       localStorage.removeItem('astra_token')
       localStorage.removeItem('astra_user')
       window.location.href = '/login'
@@ -65,6 +67,13 @@ export function streamChat(
   const token = localStorage.getItem('astra_token')
 
   ;(async () => {
+    let finished = false
+    const finish = () => {
+      if (finished) return
+      finished = true
+      onDone?.()
+    }
+
     try {
       const res = await fetch(`${API_BASE}/chat/stream`, {
         method: 'POST',
@@ -110,13 +119,14 @@ export function streamChat(
           else if (data.type === 'usage')   onUsage?.(data)
           else if (data.type === 'model')   onModel?.(data)
           else if (data.type === 'error')   onError?.(data.message || 'Generation error')
-          else if (data.type === 'done')    onDone?.()
+          else if (data.type === 'done')    finish()
         }
       }
-      onDone?.()
+      finish()
     } catch (err) {
-      if (err.name === 'AbortError') { onDone?.(); return }
+      if (err.name === 'AbortError') { finish(); return }
       onError?.('Could not reach the server. Make sure the backend is running.')
+      finish()
     }
   })()
 

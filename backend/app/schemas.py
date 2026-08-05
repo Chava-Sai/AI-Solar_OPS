@@ -24,13 +24,14 @@ class CreateUserRequest(BaseModel):
     email: str
     name: Optional[str] = None
     password: str
-    role: str
+    role: str = "user"
 
 class UserOut(BaseModel):
     id: int
     email: str
     name: str
     role: str
+    must_change_password: bool = False
 
 # ── Server-side chat conversations (Recent + Favorites) ─
 class ConversationsPayload(BaseModel):

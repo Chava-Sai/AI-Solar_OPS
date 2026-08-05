@@ -29,8 +29,16 @@ def decode_token(token: str) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+def get_authenticated_user(token: str = Depends(oauth2_scheme)) -> dict:
     return decode_token(token)
+
+def get_current_user(current_user: dict = Depends(get_authenticated_user)) -> dict:
+    if current_user.get("must_change_password"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password change required",
+        )
+    return current_user
 
 def require_role(*roles):
     def checker(current_user: dict = Depends(get_current_user)):

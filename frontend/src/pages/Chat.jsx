@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
-import rehypeRaw from 'rehype-raw'
 import {
   ArrowUp,
   Bot,
@@ -24,9 +23,10 @@ import {
   Square,
   Star,
   Trash2,
+  X,
   Zap,
 } from 'lucide-react'
-import { authAPI, chatAPI, streamChat } from '../api/client'
+import { chatAPI, streamChat } from '../api/client'
 import agsLogo from '../assets/ags-logo-hero-dark.png'
 
 function formatReset(seconds) {
@@ -146,147 +146,6 @@ function FamilyPickerButton({ fam, usage, modelPref, onPick, variant = 'segment'
                 </button>
               )
             })}
-          </div>
-        </>,
-        document.body
-      )}
-    </>
-  )
-}
-
-/**
- * Account settings — rename + password change. Rendered through a portal
- * (not inline in the sidebar) because the sidebar has `overflow: hidden` for
- * its own internal scroll areas, which was silently clipping this popover
- * when it lived inside `.sidebar-user`; a fixed-position portal escapes that
- * entirely and stays anchored to the trigger button regardless.
- */
-function SettingsButton({ user }) {
-  const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState(null)
-  const btnRef = useRef(null)
-
-  const [name, setName] = useState(user.name || '')
-  const [nameSaving, setNameSaving] = useState(false)
-  const [nameError, setNameError] = useState('')
-  const [nameDone, setNameDone] = useState(false)
-
-  const [currentPw, setCurrentPw] = useState('')
-  const [newPw, setNewPw] = useState('')
-  const [confirmPw, setConfirmPw] = useState('')
-  const [pwError, setPwError] = useState('')
-  const [pwSaving, setPwSaving] = useState(false)
-  const [pwDone, setPwDone] = useState(false)
-
-  function toggle() {
-    if (!open && btnRef.current) {
-      const r = btnRef.current.getBoundingClientRect()
-      setPos({ bottom: window.innerHeight - r.top + 10, left: Math.min(r.left, window.innerWidth - 330 - 12) })
-    }
-    setOpen((v) => !v)
-    setName(user.name || '')
-    setNameError('')
-    setNameDone(false)
-    setCurrentPw('')
-    setNewPw('')
-    setConfirmPw('')
-    setPwError('')
-    setPwDone(false)
-  }
-
-  async function saveName(e) {
-    e.preventDefault()
-    setNameError('')
-    if (!name.trim()) return setNameError('Name can\'t be empty.')
-    setNameSaving(true)
-    try {
-      const { data } = await authAPI.updateProfile(name.trim())
-      localStorage.setItem('astra_token', data.access_token)
-      localStorage.setItem('astra_user', JSON.stringify(data.user))
-      setNameDone(true)
-      setTimeout(() => window.location.reload(), 700)
-    } catch (err) {
-      setNameError(err.response?.data?.detail || 'Could not update name.')
-    } finally {
-      setNameSaving(false)
-    }
-  }
-
-  async function savePassword(e) {
-    e.preventDefault()
-    setPwError('')
-    if (newPw.length < 6) return setPwError('New password must be at least 6 characters.')
-    if (newPw !== confirmPw) return setPwError('New passwords do not match.')
-    setPwSaving(true)
-    try {
-      await authAPI.changePassword(currentPw, newPw)
-      setPwDone(true)
-      setCurrentPw('')
-      setNewPw('')
-      setConfirmPw('')
-    } catch (err) {
-      setPwError(err.response?.data?.detail || 'Could not update password.')
-    } finally {
-      setPwSaving(false)
-    }
-  }
-
-  return (
-    <>
-      <button ref={btnRef} className="icon-button" onClick={toggle} title="Account settings" aria-label="Account settings">
-        <UserCog size={17} />
-      </button>
-      {open && pos && createPortal(
-        <>
-          <div className="usage-backdrop" onClick={() => setOpen(false)} />
-          <div className="usage-panel settings-panel" role="dialog" aria-label="Account settings" style={{ position: 'fixed', bottom: pos.bottom, left: pos.left, top: 'auto', right: 'auto' }}>
-            <div className="usage-panel-head">
-              <span>Account settings</span>
-            </div>
-
-            <form className="auth-form" onSubmit={saveName}>
-              <label>
-                <span>Display name</span>
-                <input value={name} onChange={(e) => setName(e.target.value)} />
-              </label>
-              <label>
-                <span>Email</span>
-                <input value={user.email || ''} disabled title="Email is your login and can't be changed here" />
-              </label>
-              {nameError && <div className="error-banner">{nameError}</div>}
-              <button type="submit" className="cta-button" disabled={nameSaving}>
-                {nameDone ? 'Saved ✓' : nameSaving ? 'Saving…' : 'Save name'}
-              </button>
-            </form>
-
-            <div className="usage-panel-head model-head">
-              <span>Change password</span>
-            </div>
-            {pwDone ? (
-              <div className="empty-state">
-                <Check size={22} />
-                <strong>Password updated</strong>
-              </div>
-            ) : (
-              <form className="auth-form" onSubmit={savePassword}>
-                <label>
-                  <span>Current password</span>
-                  <input type="password" required value={currentPw} onChange={(e) => setCurrentPw(e.target.value)} />
-                </label>
-                <label>
-                  <span>New password</span>
-                  <input type="password" required minLength={6} value={newPw} onChange={(e) => setNewPw(e.target.value)} />
-                </label>
-                <label>
-                  <span>Confirm new password</span>
-                  <input type="password" required value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} />
-                </label>
-                {pwError && <div className="error-banner">{pwError}</div>}
-                <button type="submit" className="cta-button" disabled={pwSaving}>
-                  {pwSaving ? 'Saving…' : 'Update password'}
-                </button>
-              </form>
-            )}
           </div>
         </>,
         document.body
@@ -415,17 +274,25 @@ function ConversationRow({
   return (
     <div className={`history-item ${isActive ? 'active' : ''}`}>
       {isRenaming ? (
-        <input
-          className="rename-input"
-          autoFocus
-          value={renameValue}
-          onChange={(e) => onRenameChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') onCommitRename()
-            if (e.key === 'Escape') onCancelRename()
-          }}
-          onBlur={onCommitRename}
-        />
+        <div className="rename-shell">
+          <input
+            className="rename-input"
+            autoFocus
+            value={renameValue}
+            onFocus={(e) => e.currentTarget.select()}
+            onChange={(e) => onRenameChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onCommitRename()
+              if (e.key === 'Escape') onCancelRename()
+            }}
+          />
+          <button className="icon-mini rename-save" title="Save title" aria-label="Save title" onClick={onCommitRename}>
+            <Check size={13} />
+          </button>
+          <button className="icon-mini" title="Cancel rename" aria-label="Cancel rename" onClick={onCancelRename}>
+            <X size={13} />
+          </button>
+        </div>
       ) : (
         <button className="history-item-main" onClick={onOpen}>
           <span
@@ -438,7 +305,7 @@ function ConversationRow({
           <small>{new Date(conversation.updatedAt).toLocaleDateString()}</small>
         </button>
       )}
-      <div className="history-item-actions">
+      {!isRenaming && <div className="history-item-actions">
         <button
           className={`icon-mini favorite-btn ${conversation.favorite ? 'active' : ''}`}
           disabled={!conversation.favorite && favoritesFull}
@@ -459,7 +326,7 @@ function ConversationRow({
         <button className="icon-mini danger" title="Delete" onClick={(e) => { e.stopPropagation(); onDelete() }}>
           <Trash2 size={13} />
         </button>
-      </div>
+      </div>}
     </div>
   )
 }
@@ -502,17 +369,51 @@ const MAX_FAVORITE_CHATS = 5  // permanent, never auto-evicted; only the owner c
 // Conversations live server-side (per account, scoped by the JWT — see
 // backend/app/conversations.py), not in browser localStorage, so Recent and
 // Favorites are identical whichever browser or device you're signed in from.
+function dedupeConversations(conversations) {
+  const seenIds = new Set()
+  const recentContent = new Map()
+
+  return [...conversations]
+    .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
+    .filter((conversation) => {
+      if (!conversation?.id || seenIds.has(conversation.id)) return false
+      seenIds.add(conversation.id)
+
+      const signature = JSON.stringify(
+        (conversation.messages || []).map(({ role, text }) => ({ role, text }))
+      )
+      const createdAt = new Date(conversation.createdAt || conversation.updatedAt || 0).getTime()
+      const previousCreatedAt = recentContent.get(signature)
+      if (signature !== '[]' && previousCreatedAt != null && Math.abs(previousCreatedAt - createdAt) < 30000) {
+        return false
+      }
+      recentContent.set(signature, createdAt)
+      return true
+    })
+}
+
 async function readConversations() {
   try {
     const { data } = await chatAPI.getConversations()
-    return data.conversations || []
+    const raw = data.conversations || []
+    const normalized = dedupeConversations(raw)
+    if (normalized.length !== raw.length) {
+      await chatAPI.saveConversations(normalized).catch(() => {})
+    }
+    return normalized
   } catch {
     return []
   }
 }
 
+let conversationWriteQueue = Promise.resolve()
+
 function writeConversations(nextForUser) {
-  chatAPI.saveConversations(nextForUser).catch(() => {})
+  const normalized = dedupeConversations(nextForUser)
+  conversationWriteQueue = conversationWriteQueue
+    .catch(() => {})
+    .then(() => chatAPI.saveConversations(normalized))
+  return conversationWriteQueue
 }
 
 function titleFromMessages(messages) {
@@ -578,11 +479,9 @@ export default function Chat() {
   const bottomRef = useRef(null)
   const taRef = useRef(null)
   const ctrlRef = useRef(null)
+  const sendingRef = useRef(false)
   const chatScrollRef = useRef(null)
   const sidebarScrollRef = useRef(null)
-  // Guards against a stray blur (fired when Escape unmounts the rename input)
-  // re-committing text that the user just cancelled.
-  const suppressRenameBlur = useRef(false)
 
   useEffect(() => {
     chatScrollRef.current?.scrollTo({ top: 0 })
@@ -639,7 +538,7 @@ export default function Chat() {
         title: existing?.titleLocked ? existing.title : titleFromMessages(messages),
         titleLocked: existing?.titleLocked || false,
         favorite: existing?.favorite || false,
-        messages: messages.map(({ streaming: _streaming, sources: _sources, ...m }) => m),
+        messages: messages.map(({ streaming: _streaming, ...m }) => m),
         updatedAt: new Date().toISOString(),
         createdAt: existing?.createdAt || new Date().toISOString(),
       }
@@ -655,7 +554,7 @@ export default function Chat() {
         .slice(-MAX_RECENT_CHATS)
 
       const next = [...favorites, ...recents]
-      writeConversations(next)
+      writeConversations(next).catch(() => {})
       return next
     })
   }, [activeConversationId, messages, streaming, user.email])
@@ -672,7 +571,9 @@ export default function Chat() {
 
   function send(q) {
     const query = (q || input).trim()
-    if (!query || streaming) return
+    if (!query || sendingRef.current) return
+    sendingRef.current = true
+    if (window.matchMedia('(max-width: 980px)').matches) setSidebarOpen(false)
     const conversationId = activeConversationId || crypto.randomUUID()
     if (!activeConversationId) setActiveConversationId(conversationId)
 
@@ -687,7 +588,7 @@ export default function Chat() {
     ctrlRef.current = streamChat(
       { query, category_filter: category === 'All SOPs' ? null : category, client_filter: clientFilter, model: modelPref },
       {
-        onSources: () => {},
+        onSources: (sources) => updateLast({ sources }),
         onToken: (t) => updateLast((m) => ({ text: m.text + t })),
         onFaq: () => updateLast({ faq: true }),
         onLimit: () => updateLast({ limited: true }),
@@ -697,6 +598,7 @@ export default function Chat() {
         onDone: () => {
           updateLast({ streaming: false })
           setStreaming(false)
+          sendingRef.current = false
           ctrlRef.current = null
         },
       },
@@ -726,6 +628,7 @@ export default function Chat() {
     if (streaming) return
     setMessages([])
     setActiveConversationId(null)
+    if (window.matchMedia('(max-width: 980px)').matches) setSidebarOpen(false)
     chatScrollRef.current?.scrollTo({ top: 0 })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -734,6 +637,7 @@ export default function Chat() {
     if (streaming) return
     setActiveConversationId(conversation.id)
     setMessages(conversation.messages || [])
+    if (window.matchMedia('(max-width: 980px)').matches) setSidebarOpen(false)
     requestAnimationFrame(() => {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     })
@@ -749,21 +653,25 @@ export default function Chat() {
         return prev
       }
       const next = prev.map((c) => (c.id === conversationId ? { ...c, favorite: !c.favorite } : c))
-      writeConversations(next)
+      writeConversations(next).catch(() => {})
       return next
     })
   }
 
-  function deleteConversation(conversationId) {
+  async function deleteConversation(conversationId) {
     if (!confirm('Delete this chat? This cannot be undone.')) return
-    setConversations((prev) => {
-      const next = prev.filter((c) => c.id !== conversationId)
-      writeConversations(next)
-      return next
-    })
+    const previous = conversations
+    const next = conversations.filter((c) => c.id !== conversationId)
+    setConversations(next)
     if (activeConversationId === conversationId) {
       setMessages([])
       setActiveConversationId(null)
+    }
+    try {
+      await writeConversations(next)
+    } catch {
+      setConversations(previous)
+      alert('The chat could not be deleted. Please try again.')
     }
   }
 
@@ -773,17 +681,13 @@ export default function Chat() {
   }
 
   function commitRename() {
-    if (suppressRenameBlur.current) {
-      suppressRenameBlur.current = false
-      return
-    }
     if (!renamingId) return
     const trimmed = renameValue.trim()
     setConversations((prev) => {
       const next = prev.map((c) =>
         c.id === renamingId ? { ...c, title: trimmed || c.title, titleLocked: true } : c
       )
-      writeConversations(next)
+      writeConversations(next).catch(() => {})
       return next
     })
     setRenamingId(null)
@@ -791,7 +695,6 @@ export default function Chat() {
   }
 
   function cancelRename() {
-    suppressRenameBlur.current = true
     setRenamingId(null)
     setRenameValue('')
   }
@@ -829,6 +732,9 @@ export default function Chat() {
         <div className="sidebar-mobile-backdrop" onClick={() => setSidebarOpen(false)} />
       )}
       <aside className="sidebar">
+        <button className="sidebar-close" onClick={() => setSidebarOpen(false)} title="Close navigation" aria-label="Close navigation">
+          <X size={18} />
+        </button>
         <div className="brand-lockup">
           <img className="brand-logo" src={agsLogo} alt="American Green Solutions" />
           <p className="brand-sub">SolarOps command center</p>
@@ -976,7 +882,9 @@ export default function Chat() {
               <Settings size={17} />
             </button>
           )}
-          <SettingsButton user={user} />
+          <button className="icon-button" onClick={() => navigate('/settings')} title="Account settings" aria-label="Account settings">
+            <UserCog size={17} />
+          </button>
           <button className="icon-button" onClick={logout} title="Sign out" aria-label="Sign out">
             <LogOut size={17} />
           </button>
@@ -1067,8 +975,29 @@ export default function Chat() {
                         </div>
                       ) : (
                         <div className="md-content">
-                          <ReactMarkdown rehypePlugins={[rehypeRaw]}>{normalizeAnswerText(msg.text)}</ReactMarkdown>
+                          <ReactMarkdown skipHtml>{normalizeAnswerText(msg.text)}</ReactMarkdown>
                           {msg.streaming && <span className="stream-cursor" />}
+                        </div>
+                      )}
+
+                      {!msg.streaming && msg.sources?.length > 0 && (
+                        <div className="source-block">
+                          <div className="source-title">
+                            <Database size={13} />
+                            Sources used
+                          </div>
+                          <div className="source-chips">
+                            {msg.sources.map((source, sourceIndex) => (
+                              <span
+                                className="source-chip"
+                                key={`${source.document}-${source.page}-${source.section}-${sourceIndex}`}
+                                title={[source.document, source.section, source.page].filter(Boolean).join(' · ')}
+                              >
+                                {source.document}
+                                {source.page && <small>{source.page}</small>}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
 

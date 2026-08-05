@@ -21,7 +21,7 @@ export default function Login() {
       const { data } = await authAPI.login(email, password)
       localStorage.setItem('astra_token', data.access_token)
       localStorage.setItem('astra_user', JSON.stringify(data.user))
-      navigate('/')
+      navigate(data.user.must_change_password ? '/settings' : '/', { replace: true })
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed. Check your credentials.')
     } finally {
@@ -91,9 +91,10 @@ export default function Login() {
                 <input
                   type="email"
                   required
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@ags.com"
+                  placeholder="you@amgsol.com"
                 />
               </div>
             </label>
@@ -104,6 +105,7 @@ export default function Login() {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -119,7 +121,7 @@ export default function Login() {
               </div>
             </label>
 
-            {error && <div className="error-banner">{error}</div>}
+            {error && <div className="error-banner" role="alert">{error}</div>}
 
             <button type="submit" className="cta-button" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign in'}

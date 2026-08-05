@@ -31,6 +31,7 @@ def _seed_users() -> dict:
             "email": "Arunpandian@amgsol.com",
             "name": "Arun Pandian",
             "role": "admin",
+            "must_change_password": False,
             "hashed_password": hash_password("Arun@123"),
         }
     }
@@ -41,6 +42,8 @@ def _load() -> dict:
         try:
             data = json.loads(USERS_FILE.read_text())
             if data.get("users"):
+                for user in data["users"].values():
+                    user.setdefault("must_change_password", False)
                 return data
         except Exception:
             pass
@@ -64,7 +67,13 @@ def get_user(email: str):
 
 def list_users() -> list:
     return [
-        {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"]}
+        {
+            "id": u["id"],
+            "email": u["email"],
+            "name": u["name"],
+            "role": u["role"],
+            "must_change_password": u.get("must_change_password", False),
+        }
         for u in sorted(_data["users"].values(), key=lambda u: u["id"])
     ]
 
@@ -73,8 +82,8 @@ def create_user(email: str, name: str, password: str, role: str) -> dict:
     key = email.strip().lower()
     if role not in VALID_ROLES:
         raise ValueError(f"Invalid role '{role}'. Must be one of {VALID_ROLES}.")
-    if len(password) < 6:
-        raise ValueError("Password must be at least 6 characters.")
+    if len(password) < 10:
+        raise ValueError("Password must be at least 10 characters.")
     with _lock:
         if key in _data["users"]:
             raise ValueError(f"An account with email '{email}' already exists.")
@@ -83,12 +92,19 @@ def create_user(email: str, name: str, password: str, role: str) -> dict:
             "email": email.strip(),
             "name": name.strip() or email.split("@")[0],
             "role": role,
+            "must_change_password": True,
             "hashed_password": hash_password(password),
         }
         _data["users"][key] = user
         _data["next_id"] += 1
         _save(_data)
-        return {"id": user["id"], "email": user["email"], "name": user["name"], "role": user["role"]}
+        return {
+            "id": user["id"],
+            "email": user["email"],
+            "name": user["name"],
+            "role": user["role"],
+            "must_change_password": user["must_change_password"],
+        }
 
 
 def delete_user(email: str, requester_email: str):
@@ -107,12 +123,13 @@ def delete_user(email: str, requester_email: str):
 
 def update_password(email: str, new_password: str):
     key = email.strip().lower()
-    if len(new_password) < 6:
-        raise ValueError("Password must be at least 6 characters.")
+    if len(new_password) < 10:
+        raise ValueError("Password must be at least 10 characters.")
     with _lock:
         if key not in _data["users"]:
             raise ValueError("User not found.")
         _data["users"][key]["hashed_password"] = hash_password(new_password)
+        _data["users"][key]["must_change_password"] = False
         _save(_data)
 
 
@@ -127,7 +144,13 @@ def update_name(email: str, new_name: str) -> dict:
         _data["users"][key]["name"] = new_name
         _save(_data)
         u = _data["users"][key]
-        return {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"]}
+        return {
+            "id": u["id"],
+            "email": u["email"],
+            "name": u["name"],
+            "role": u["role"],
+            "must_change_password": u.get("must_change_password", False),
+        }
 
 
 # ── In-memory chat history (team-wide History tab) ─────

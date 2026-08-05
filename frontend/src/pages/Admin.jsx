@@ -18,6 +18,7 @@ import {
   UploadCloud,
   UserPlus,
   Users,
+  X,
   XCircle,
   Zap,
 } from 'lucide-react'
@@ -358,6 +359,9 @@ export default function Admin() {
 
       {railOpen && <div className="sidebar-mobile-backdrop" onClick={() => setRailOpen(false)} />}
       <aside className="admin-rail">
+        <button className="sidebar-close" onClick={() => setRailOpen(false)} title="Close navigation" aria-label="Close navigation">
+          <X size={18} />
+        </button>
         <div className="brand-lockup">
           <img className="brand-logo" src={agsLogo} alt="American Green Solutions" />
           <p className="brand-sub">Admin console</p>
@@ -420,14 +424,20 @@ export default function Admin() {
                 : 'Add teammates and manage who can sign in — no code changes needed.'}
             </span>
           </div>
-          <button
-            className="subtle-button"
-            onClick={view === 'docs' ? loadDocs : view === 'usage' ? loadTeamUsage : loadTeamUsers}
-            disabled={loading}
-          >
-            <RefreshCw size={15} className={loading ? 'spin' : ''} />
-            Refresh
-          </button>
+          <div className="admin-header-actions">
+            <button className="subtle-button" onClick={() => navigate('/')}>
+              <ArrowLeft size={15} />
+              Back to chat
+            </button>
+            <button
+              className="subtle-button"
+              onClick={view === 'docs' ? loadDocs : view === 'usage' ? loadTeamUsage : loadTeamUsers}
+              disabled={loading}
+            >
+              <RefreshCw size={15} className={loading ? 'spin' : ''} />
+              Refresh
+            </button>
+          </div>
         </header>
 
         {view === 'usage' && (
@@ -572,7 +582,7 @@ export default function Admin() {
                 <div className="card-icon"><UserPlus size={20} /></div>
                 <div>
                   <h2>Add a teammate</h2>
-                  <p>They can sign in immediately and change their password after logging in.</p>
+                  <p>They must replace the temporary password on first sign-in.</p>
                 </div>
               </div>
 
@@ -598,12 +608,13 @@ export default function Admin() {
                 <label>
                   <span>Temporary password</span>
                   <input
-                    type="text"
+                    type="password"
                     required
-                    minLength={6}
+                    minLength={10}
+                    autoComplete="new-password"
                     value={newUser.password}
                     onChange={(e) => setNewUser((u) => ({ ...u, password: e.target.value }))}
-                    placeholder="At least 6 characters"
+                    placeholder="At least 10 characters"
                   />
                 </label>
                 <label>
@@ -612,8 +623,8 @@ export default function Admin() {
                     value={newUser.role}
                     onChange={(e) => setNewUser((u) => ({ ...u, role: e.target.value }))}
                   >
-                    <option value="admin">Admin</option>
                     <option value="user">User</option>
+                    <option value="admin">Admin</option>
                   </select>
                 </label>
 
